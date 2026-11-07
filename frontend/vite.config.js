@@ -19,24 +19,42 @@ export default defineConfig({
         background_color: "#f5f7ff",
         theme_color: "#7c3aed",
         icons: [
-          { src: "/kivo-icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
-          { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" }
-        ]
+          {
+            src: "/launchericon-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: "/launchericon-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+          },
+          {
+            src: "/launchericon-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          { src: "/kivo-icon.svg", sizes: "any", type: "image/svg+xml" },
+        ],
       },
       workbox: {
         navigateFallback: "/index.html",
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff,woff2}"],
-        runtimeCaching: [{
-          urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
-          handler: "NetworkOnly"
-        }]
-      }
-    })
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+            handler: "NetworkOnly",
+          },
+        ],
+      },
+    }),
   ],
   server: {
     port: 5173,
-    proxy: { "/api": "http://localhost:4000", "/uploads": "http://localhost:4000" }
-  }
+    proxy: {
+      "/api": "http://localhost:4000",
+      "/uploads": "http://localhost:4000",
+    },
+  },
 });
