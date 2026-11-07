@@ -1,5 +1,6 @@
 import { BookOpen, Flame, LayoutDashboard, Settings } from "lucide-react";
 import Logo from "./Logo";
+import PwaExperience from "./PwaExperience";
 
 export default function AppShell({ children, page, onNavigate }) {
   const nav = [
@@ -8,6 +9,7 @@ export default function AppShell({ children, page, onNavigate }) {
   ];
   return (
     <div className="app-shell">
+      <PwaExperience />
       <aside className="sidebar">
         <button className="brand-button" onClick={() => onNavigate("dashboard")}><Logo /></button>
         <nav>{nav.map(([id, Icon, label]) => <button key={id} className={page === id ? "active" : ""} onClick={() => onNavigate(id)}><Icon size={19} /><span>{label}</span></button>)}</nav>

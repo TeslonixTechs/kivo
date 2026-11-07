@@ -169,6 +169,17 @@ button { cursor: pointer; }
   .test-actions button { flex:1;padding-inline:12px; }
   .loading-state { min-height:280px;padding:24px 12px; }
 }
+
+html, body, #root { width:100%; max-width:100%; overflow-x:hidden; }
+button, a, input, select, textarea { touch-action:manipulation; }
+button { min-height:44px; }
+.install-app-button { position:fixed; right:max(16px,env(safe-area-inset-right)); top:max(16px,env(safe-area-inset-top)); z-index:45; min-height:44px; border:0;border-radius:12px;padding:0 14px;background:#7c3aed;color:white;display:flex;align-items:center;gap:8px;font-weight:800;box-shadow:0 12px 30px rgba(124,58,237,.3); }
+.offline-banner { position:fixed; left:50%; bottom:calc(82px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:50; width:min(520px,calc(100% - 24px)); min-height:44px;border-radius:12px;padding:10px 14px;background:#171d38;color:white;display:flex;align-items:center;justify-content:center;gap:8px;text-align:center;font-size:12px;box-shadow:0 12px 35px rgba(11,15,36,.3); }
+.mobile-nav { padding-bottom:env(safe-area-inset-bottom); height:calc(62px + env(safe-area-inset-bottom)); }
+@media (max-width:640px) {
+  .app-main { padding-top:env(safe-area-inset-top); }
+  .install-app-button { right:12px;top:calc(12px + env(safe-area-inset-top));font-size:12px; }
+}
 @media (max-width:640px) {
   .settings-page { padding:28px 16px 100px; }.theme-options { grid-template-columns:1fr; }.danger-card { align-items:flex-start;flex-direction:column; }.danger-card button { width:100%;justify-content:center; }.profile-summary { grid-template-columns:48px 1fr; }.profile-summary small { grid-column:2;justify-self:start; }.settings-page > header h1 { font-size:32px; }
 }

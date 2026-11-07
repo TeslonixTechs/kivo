@@ -4,7 +4,15 @@ import cors from "cors";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-app.use(cors({ origin: true }));
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+app.use(cors({
+  origin: allowedOrigins.length
+    ? (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin))
+    : true
+}));
 app.use(express.json({ limit: "10mb" }));
 
 app.get("/api/health", (_req, res) => {
