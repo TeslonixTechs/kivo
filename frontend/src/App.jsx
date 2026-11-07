@@ -40,10 +40,16 @@ export default function App() {
     setKits((current) => current.map((item) => item.id === kit.id ? kit : item));
     setSelected(kit);
   };
+  const deleteKit = async (id) => {
+    await db.kits.remove(id);
+    setKits((current) => current.filter((kit) => kit.id !== id));
+    if (selected?.id === id) setSelected(null);
+    setScreen("dashboard");
+  };
 
   if (booting) return <SplashScreen onComplete={finishSplash} />;
   if (!profile) return <Onboarding onComplete={completeOnboarding} />;
   if (screen === "kit" && selected) return <StudyKit kit={selected} onNavigate={setScreen} onUpdate={updateKit} />;
   if (screen === "create") return <CreateKit onNavigate={setScreen} onCreated={createKit} />;
-  return <Dashboard profile={profile} kits={kits} streak={0} onNavigate={setScreen} onCreate={() => setScreen("create")} onOpenKit={(kit) => { setSelected(kit); setScreen("kit"); }} />;
+  return <Dashboard profile={profile} kits={kits} streak={0} onNavigate={setScreen} onCreate={() => setScreen("create")} onDeleteKit={deleteKit} onOpenKit={(kit) => { setSelected(kit); setScreen("kit"); }} />;
 }

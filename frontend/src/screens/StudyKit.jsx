@@ -52,7 +52,10 @@ const requestQuestions = async ({ kit, guide, type = "MCQ", difficulty = "Interm
       source: guide?.overview ? [guide.overview, ...(guide.sections || []).map((section) => `${section.heading}: ${section.content}`)].join("\n\n") : ""
     })
   });
-  if (!response.ok) throw new Error("Question generation failed.");
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || "Question generation failed.");
+  }
   return response.json();
 };
 
@@ -75,23 +78,14 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: kit.title, difficulty: kit.difficulty, materials: kit.materials || [], sourceText: sourceText.filter(Boolean).join("\n\n") })
       });
-      if (!response.ok) throw new Error("Study guide generation failed.");
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Study guide generation failed.");
+      }
       const result = await response.json();
       await onUpdate({ ...kit, progress: 25, guide: result.guide });
     } catch (error) {
-      await onUpdate({
-        ...kit,
-        progress: 25,
-        guide: {
-          title: kit.title,
-          overview: `This guide summarizes the key ideas covered in ${kit.title}. Review the organized sections below before beginning practice questions.`,
-          sections: [
-            { heading: "Core concepts and definitions", content: "Identify the central terms, principles, and definitions in the uploaded materials. Explain each idea in your own words and connect it to an example." },
-            { heading: "Important details and relationships", content: "Review the supporting details, processes, exceptions, comparisons, dates, formulas, and relationships that explain how the main ideas work together." },
-            { heading: "Detailed review", content: "Read each section carefully, create a short summary from memory, and revisit any topic that remains unclear. Focus especially on distinctions and practical applications." }
-          ]
-        }
-      });
+      window.alert(`Study guide generation failed: ${error.message}`);
       setGenerating(false);
     }
   };
@@ -133,6 +127,7 @@ function SmartPractice({ kit }) {
     } finally {
       setLoading(false);
     }
+    catch
   };
   if (!kit.guide) return <section className="tab-panel generate-state"><div><Sparkles /></div><p className="eyebrow">SMART STUDY</p><h2>Generate your study guide first</h2><p>Smart Study creates questions from the summary that is generated from your uploaded notes.</p></section>;
   if (!questions.length) return <section className="tab-panel practice"><div className="practice-card practice-launch"><Sparkles /><h2>Practice from your study guide</h2><p>Questions are generated from the key concepts in your uploaded notes.</p><button className="primary-button" disabled={loading} onClick={loadQuestions}>{loading ? "Generating questions..." : "Start smart study"}</button></div></section>;
