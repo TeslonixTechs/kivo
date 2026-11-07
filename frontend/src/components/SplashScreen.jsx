@@ -5,7 +5,7 @@ export default function SplashScreen({ onComplete }) {
   useEffect(() => {
     const burst = setTimeout(() => setPhase("burst"), 1500);
     const reveal = setTimeout(() => setPhase("reveal"), 2200);
-    const finish = setTimeout(onComplete, 3900);
+    const finish = setTimeout(onComplete, 5000);
     return () => [burst, reveal, finish].forEach(clearTimeout);
   }, [onComplete]);
   return (
@@ -16,6 +16,11 @@ export default function SplashScreen({ onComplete }) {
         <img src="/kivo-logo.png" alt="Kivo" />
         <h1>Kivo</h1>
         <p>Learn deeply. Remember longer.</p>
+        <div className="splash-loading" aria-label="Loading Kivo">
+          <span />
+          <span />
+          <span />
+        </div>
       </div>
     </div>
   );

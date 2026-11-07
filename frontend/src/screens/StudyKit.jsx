@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { ArrowLeft, BookOpen, CircleHelp, FileText, FolderOpen, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -6,6 +6,7 @@ import mammoth from "mammoth/mammoth.browser";
 import JSZip from "jszip";
 import AppShell from "../components/AppShell";
 import LoadingState from "../components/LoadingState";
+import StudyNotes from "../components/StudyNotes";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -63,6 +64,8 @@ const requestQuestions = async ({ kit, guide, type = "MCQ", difficulty = "Interm
 export default function StudyKit({ kit, onNavigate, onUpdate }) {
   const [tab, setTab] = useState("guide");
   const [generating, setGenerating] = useState(false);
+  const [guideError, setGuideError] = useState("");
+  const [copied, setCopied] = useState(false);
   const input = useRef(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pastedText, setPastedText] = useState("");
@@ -72,9 +75,10 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
   };
   const generate = async () => {
     setGenerating(true);
+    setGuideError("");
     try {
       const sourceText = await Promise.all((kit.materials || []).map(extractMaterialText));
-      const response = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/analyze`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/study-guide`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: kit.title, difficulty: kit.difficulty, materials: kit.materials || [], sourceText: sourceText.filter(Boolean).join("\n\n") })
@@ -87,7 +91,7 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
       await onUpdate({ ...kit, progress: 25, guide: result.guide });
       setGenerating(false);
     } catch (error) {
-      window.alert("AI generation failed");
+      setGuideError("We couldn't generate your study notes. Please try again.");
       setGenerating(false);
     }
   };
@@ -103,16 +107,59 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
     setPastedText("");
     setPasteOpen(false);
   };
-  useEffect(() => {
-    if (tab === "guide" && !generating && (kit.materials || []).length > 0 && !kit.guide) generate();
-  }, [tab, kit.id]);
+  const copyNotes = async () => {
+    const guide = kit.guide;
+    const notes = [
+      guide.title,
+      guide.overview,
+      ...(guide.sections || []).flatMap((section) => [
+        section.heading,
+        section.content,
+        ...(section.points || []),
+        ...(section.keyTerms || []).map((term) => `${term.term || term.word}: ${term.meaning}`)
+      ]),
+      ...(guide.quickRevision || [])
+    ].filter(Boolean).join("\n\n");
+    await navigator.clipboard.writeText(notes);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
 
   const tabs = [["guide", BookOpen, "Study guide"], ["materials", FolderOpen, "Materials"], ["smart", Sparkles, "Smart study"], ["test", CircleHelp, "Test"]];
   const hasMaterials = (kit.materials || []).length > 0;
   const activityScore = Math.min(100, (kit.progress || 0) + (kit.guide ? 25 : 0) + (hasMaterials ? 15 : 0));
   return <AppShell page="kits" onNavigate={onNavigate}><div className="study-page"><button className="back-link kit-back" onClick={() => onNavigate("dashboard")}><ArrowLeft size={16} /> All kits</button><header className="kit-heading"><div><p className="eyebrow">{kit.difficulty} study kit</p><h1>{kit.title}</h1></div><div className="kit-progress" aria-label={`${activityScore}% activity, performance, and consistency score`}><span>{activityScore}% study progress</span><div><i style={{ width: `${activityScore}%` }} /></div></div></header><nav className="study-tabs">{tabs.map(([id, Icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><Icon size={18} /><span>{label}</span></button>)}</nav>
     {tab === "materials" && <section className="tab-panel"><div className="section-title"><div><p className="eyebrow">SOURCE LIBRARY</p><h2>Materials</h2></div><span>{kit.materials?.length || 0} files</span></div><div className="upload-actions"><button className="upload-zone" onClick={() => input.current.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addFiles(event.dataTransfer.files); }}><input ref={input} type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.csv,.rtf" onChange={(event) => addFiles(event.target.files)} /><UploadCloud /><strong>Upload study materials</strong><span>PDF, Word, PowerPoint, text, Markdown, CSV, and RTF</span></button><button className="paste-source" onClick={() => setPasteOpen(true)}><FileText /><strong>Paste text</strong><span>Add copied notes directly</span></button></div>{pasteOpen && <div className="paste-panel"><label><span>Paste class notes or copied text</span><textarea autoFocus value={pastedText} onChange={(event) => setPastedText(event.target.value)} placeholder="Paste your study notes here..." /></label><div><button className="secondary-button" onClick={() => setPasteOpen(false)}>Cancel</button><button className="primary-button" disabled={!pastedText.trim()} onClick={addPastedText}>Add notes</button></div></div>}<div className="material-list">{kit.materials?.map((file) => <div key={file.id}><div className="file-icon"><FileText size={19} /></div><span><strong>{file.name}</strong><small>{Math.max(1, Math.round(file.size / 1024))} KB</small></span><button className="delete-material" aria-label={`Delete ${file.name}`} onClick={() => removeMaterial(file)}><Trash2 size={17} /></button></div>)}</div></section>}
-    {tab === "guide" && <section className="tab-panel guide-panel">{generating ? <LoadingState label="Creating your study guide from the uploaded materials" /> : !hasMaterials ? <div className="generate-state"><div><FolderOpen /></div><p className="eyebrow">MATERIALS NEEDED</p><h2>Upload materials to begin</h2><p>Add a PDF, Word, PowerPoint, text file, or pasted notes. Kivo will turn them into your study guide.</p><button className="primary-button" onClick={() => setTab("materials")}>Upload materials</button></div> : !kit.guide ? <div className="generate-state"><div><Sparkles /></div><p className="eyebrow">AI STUDY GUIDE</p><h2>Study guide not available yet</h2><p>The summary could not be generated. Check your connection and try again.</p><button className="primary-button" disabled={generating} onClick={generate}>Retry generation</button></div> : <article className="guide-document"><p className="eyebrow">STUDY GUIDE</p><h2>{kit.guide.title}</h2><p className="guide-intro">{kit.guide.overview}</p>{(kit.guide.sections || []).map((section, index) => <section key={section.heading}><span>0{index + 1}</span><div><h3>{section.heading}</h3><p>{section.content}</p></div></section>)}</article>}</section>}
+    {tab === "guide" && (
+      <section className="tab-panel guide-panel">
+        {!hasMaterials ? (
+          <div className="generate-state guide-empty-card">
+            <div><FolderOpen /></div>
+            <h2>Upload materials first</h2>
+            <button className="primary-button" onClick={() => setTab("materials")}>Go to Materials</button>
+          </div>
+        ) : generating ? (
+          <LoadingState label="Preparing your notes..." />
+        ) : kit.guide ? (
+          <div>
+            <div className="guide-actions">
+              <button className="secondary-button" disabled={generating} onClick={generate}>Regenerate</button>
+              <button className="primary-button" onClick={copyNotes}>{copied ? "Copied!" : "Copy notes"}</button>
+            </div>
+            <StudyNotes guide={kit.guide} />
+          </div>
+        ) : (
+          <div className="generate-state guide-empty-card">
+            <div><Sparkles /></div>
+            {guideError && <p className="guide-error" role="alert">{guideError}</p>}
+            <p>Generate a study guide from your uploaded materials</p>
+            <button className="primary-button" disabled={generating} onClick={generate}>
+              {guideError ? "Retry" : "Generate study guide"}
+            </button>
+          </div>
+        )}
+      </section>
+    )}
     {tab === "smart" && <SmartPractice kit={kit} />}
     {tab === "test" && <TestView kit={kit} />}
   </div></AppShell>;
@@ -139,7 +186,7 @@ function SmartPractice({ kit }) {
     }
   };
   if (!kit.guide) return <section className="tab-panel generate-state"><div><Sparkles /></div><p className="eyebrow">SMART STUDY</p><h2>Generate your study guide first</h2><p>Smart Study creates questions from the summary that is generated from your uploaded notes.</p></section>;
-  if (!questions.length) return <section className="tab-panel practice"><div className="practice-card practice-launch"><Sparkles /><h2>Practice from your study guide</h2><p>Questions are generated from the key concepts in your uploaded notes.</p><button className="primary-button" disabled={loading} onClick={loadQuestions}>{loading ? "Generating questions..." : "Start smart study"}</button></div></section>;
+  if (!questions.length) return <section className="tab-panel practice">{loading ? <LoadingState label="Generating smart study questions" /> : <div className="practice-card practice-launch"><Sparkles /><h2>Practice from your study guide</h2><p>Questions are generated from the key concepts in your uploaded notes.</p><button className="primary-button" onClick={loadQuestions}>Start smart study</button></div>}</section>;
   const question = questions[questionIndex % questions.length];
   const accuracy = answeredCount ? Math.round((correctCount / answeredCount) * 100) : 100;
   const chooseAnswer = (index) => {
@@ -219,5 +266,5 @@ function TestView({ kit }) {
       })}</div> : <textarea placeholder="Write your answer..." value={typeof selected === "string" ? selected : ""} onChange={(event) => setSelected(event.target.value)} />}
       <div className="test-actions"><button className="skip-button" onClick={next}>Skip question</button><button className="primary-button" disabled={selected === null || selected === ""} onClick={next}>{questionIndex + 1 === Number(config.questions) ? "Finish test" : "Next question"} →</button></div>
     </div>
-  </section> : <section className="tab-panel test-create"><p className="eyebrow">ASSESS YOUR PROGRESS</p><h2>Create a test</h2><div className="test-types">{["MCQ", "Theory"].map((type) => <button key={type} className={config.type === type ? "selected" : ""} onClick={() => setConfig({ ...config, type })}>{type}</button>)}</div><div className="test-config"><label>Difficulty<select value={config.difficulty} onChange={(event) => setConfig({ ...config, difficulty: event.target.value })}><option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option></select></label><label>Questions<select value={config.questions} onChange={(event) => setConfig({ ...config, questions: event.target.value })}><option value="5">5</option><option value="10">10</option><option value="20">20</option></select></label><label>Timer (minutes)<select value={config.timer} onChange={(event) => setConfig({ ...config, timer: event.target.value })}><option>10</option><option>20</option><option>30</option></select></label></div><button className="primary-button wide" disabled={loading} onClick={beginTest}>{loading ? "Generating questions..." : "Start test"}</button></section>;
+  </section> : loading ? <LoadingState label="Generating your test" /> : <section className="tab-panel test-create"><p className="eyebrow">ASSESS YOUR PROGRESS</p><h2>Create a test</h2><div className="test-types">{["MCQ", "Theory"].map((type) => <button key={type} className={config.type === type ? "selected" : ""} onClick={() => setConfig({ ...config, type })}>{type}</button>)}</div><div className="test-config"><label>Difficulty<select value={config.difficulty} onChange={(event) => setConfig({ ...config, difficulty: event.target.value })}><option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option></select></label><label>Questions<select value={config.questions} onChange={(event) => setConfig({ ...config, questions: event.target.value })}><option value="5">5</option><option value="10">10</option><option value="20">20</option></select></label><label>Timer (minutes)<select value={config.timer} onChange={(event) => setConfig({ ...config, timer: event.target.value })}><option>10</option><option>20</option><option>30</option></select></label></div><button className="primary-button wide" onClick={beginTest}>Start test</button></section>;
 }

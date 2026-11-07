@@ -9,7 +9,7 @@ import Settings from "./screens/Settings";
 import LoadingState from "./components/LoadingState";
 
 export default function App() {
-  const [booting, setBooting] = useState(sessionStorage.getItem("kivo:splash-seen") !== "1");
+  const [booting, setBooting] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [theme, setTheme] = useState(localStorage.getItem("kivo:theme") || "light");
   const [profile, setProfile] = useState(null);
@@ -17,7 +17,6 @@ export default function App() {
   const [screen, setScreen] = useState("dashboard");
   const [selected, setSelected] = useState(null);
   const finishSplash = useCallback(() => {
-    sessionStorage.setItem("kivo:splash-seen", "1");
     setBooting(false);
   }, []);
 

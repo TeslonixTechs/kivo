@@ -13,28 +13,83 @@ app.get("/api/health", (_req, res) => {
 
 async function generateWithGemini(prompt) {
   if (!process.env.GEMINI_API_KEY) throw new Error("AI provider is not configured");
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      generationConfig: { responseMimeType: "application/json" },
-      contents: [{ parts: [{ text: prompt }] }]
-    })
-  });
-  if (!response.ok) throw new Error(`Gemini request failed (${response.status})`);
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("");
-  return JSON.parse(text);
+  const configuredModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const models = [...new Set([
+    configuredModel,
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash"
+  ])].filter(Boolean);
+  let lastStatus = 500;
+
+  for (const model of models) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        generationConfig: { responseMimeType: "application/json" },
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("");
+      const json = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      return JSON.parse(json);
+    }
+    lastStatus = response.status;
+    if (![404, 400].includes(response.status)) break;
+  }
+
+  throw new Error(`Gemini request failed (${lastStatus})`);
 }
+
+app.post("/api/study-guide", async (req, res) => {
+  const { title = "Study kit", difficulty = "Intermediate", materials = [], sourceText = "" } = req.body;
+  const source = sourceText.trim();
+  try {
+    if (!source) throw new Error("No material text was provided");
+    const prompt = `Create concise, detailed study notes from the uploaded class material for "${title}" at ${difficulty} level.
+
+Use only the supplied material. Identify the real lecture topics and explain every important idea.
+Return only valid JSON:
+{"title":"topic-based title","overview":"short summary of the material","sections":[{"heading":"actual topic","content":"clear explanation","points":["important bullet point","another bullet point"],"keyTerms":[{"term":"key term","meaning":"meaning"}]}],"quickRevision":["revision point 1","revision point 2"]}
+
+Make key terms and important facts bold using Markdown **double asterisks** inside strings. Do not use generic headings or invented content.
+
+Uploaded material:
+${source.slice(0, 120000)}`;
+    const generated = await generateWithGemini(prompt);
+    if (!generated?.overview || !Array.isArray(generated.sections)) throw new Error("Invalid AI response");
+    res.json({ provider: "gemini", guide: { title, difficulty, ...generated, sourceCount: materials.length } });
+  } catch (error) {
+    console.error("AI guide generation failed:", error.message);
+    res.status(502).json({ error: "AI generation failed" });
+  }
+});
 
 app.post("/api/analyze", async (req, res) => {
   const { title = "Study kit", difficulty = "Intermediate", materials = [], sourceText = "" } = req.body;
-  const prompt = `Create a detailed student study guide for "${title}" at ${difficulty} level, based only on this source material. Include definitions, core concepts, important details, relationships, examples, and exam review. Return valid JSON with overview (string), sections (array of {heading, content}), and terms (array of {word, meaning}). Make the sections detailed.
-
-Source:
-${sourceText.slice(0, 120000) || materials.map((item) => item.name).join(", ")}`;
+  const source = sourceText.trim();
   try {
+    if (!source) throw new Error("No material text was provided");
+    const prompt = `Analyze the uploaded class material below and create a detailed study guide for "${title}" at ${difficulty} level.
+
+Rules:
+- Use only the uploaded material. Do not invent a generic course outline.
+- Identify the actual topics and headings that appear in the material.
+- Write complete explanations in the student's own reading-friendly notes.
+- Include every important definition, fact, process, relationship, example, list, diagram label, and exam-relevant detail found in the source.
+- Preserve technical terms exactly where possible.
+- Do not use placeholder headings such as "Core concepts and definitions".
+- Each section must be based on a specific topic found in the source.
+- Organize the guide as a useful lesson that can be read before practice questions.
+
+Return only valid JSON in this exact shape:
+{"overview":"2-4 sentence summary of the uploaded material","sections":[{"heading":"actual topic from the source","content":"detailed paragraph(s) explaining that topic using the source"}],"terms":[{"word":"term from the source","meaning":"clear student-friendly meaning"}]}
+
+Uploaded material:
+${source.slice(0, 120000)}`;
     const generated = await generateWithGemini(prompt);
     if (!generated?.overview || !Array.isArray(generated.sections)) throw new Error("Invalid AI response");
     res.json({ provider: "gemini", guide: { title, difficulty, ...generated, sourceCount: materials.length } });
