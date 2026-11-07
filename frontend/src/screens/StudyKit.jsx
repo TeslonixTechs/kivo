@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, BookOpen, CircleHelp, FileText, FolderOpen, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import mammoth from "mammoth/mammoth.browser";
 import JSZip from "jszip";
 import AppShell from "../components/AppShell";
+import LoadingState from "../components/LoadingState";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -84,8 +85,9 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
       }
       const result = await response.json();
       await onUpdate({ ...kit, progress: 25, guide: result.guide });
+      setGenerating(false);
     } catch (error) {
-      window.alert(`Study guide generation failed: ${error.message}`);
+      window.alert("AI generation failed");
       setGenerating(false);
     }
   };
@@ -101,10 +103,16 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
     setPastedText("");
     setPasteOpen(false);
   };
+  useEffect(() => {
+    if (tab === "guide" && !generating && (kit.materials || []).length > 0 && !kit.guide) generate();
+  }, [tab, kit.id]);
+
   const tabs = [["guide", BookOpen, "Study guide"], ["materials", FolderOpen, "Materials"], ["smart", Sparkles, "Smart study"], ["test", CircleHelp, "Test"]];
-  return <AppShell page="kits" onNavigate={onNavigate}><div className="study-page"><button className="back-link kit-back" onClick={() => onNavigate("dashboard")}><ArrowLeft size={16} /> All kits</button><header className="kit-heading"><div><p className="eyebrow">{kit.difficulty} study kit</p><h1>{kit.title}</h1></div><div className="kit-progress"><span>{kit.progress || 0}% ready</span><div><i style={{ width: `${kit.progress || 0}%` }} /></div></div></header><nav className="study-tabs">{tabs.map(([id, Icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><Icon size={18} /><span>{label}</span></button>)}</nav>
+  const hasMaterials = (kit.materials || []).length > 0;
+  const activityScore = Math.min(100, (kit.progress || 0) + (kit.guide ? 25 : 0) + (hasMaterials ? 15 : 0));
+  return <AppShell page="kits" onNavigate={onNavigate}><div className="study-page"><button className="back-link kit-back" onClick={() => onNavigate("dashboard")}><ArrowLeft size={16} /> All kits</button><header className="kit-heading"><div><p className="eyebrow">{kit.difficulty} study kit</p><h1>{kit.title}</h1></div><div className="kit-progress" aria-label={`${activityScore}% activity, performance, and consistency score`}><span>{activityScore}% study progress</span><div><i style={{ width: `${activityScore}%` }} /></div></div></header><nav className="study-tabs">{tabs.map(([id, Icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><Icon size={18} /><span>{label}</span></button>)}</nav>
     {tab === "materials" && <section className="tab-panel"><div className="section-title"><div><p className="eyebrow">SOURCE LIBRARY</p><h2>Materials</h2></div><span>{kit.materials?.length || 0} files</span></div><div className="upload-actions"><button className="upload-zone" onClick={() => input.current.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addFiles(event.dataTransfer.files); }}><input ref={input} type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.csv,.rtf" onChange={(event) => addFiles(event.target.files)} /><UploadCloud /><strong>Upload study materials</strong><span>PDF, Word, PowerPoint, text, Markdown, CSV, and RTF</span></button><button className="paste-source" onClick={() => setPasteOpen(true)}><FileText /><strong>Paste text</strong><span>Add copied notes directly</span></button></div>{pasteOpen && <div className="paste-panel"><label><span>Paste class notes or copied text</span><textarea autoFocus value={pastedText} onChange={(event) => setPastedText(event.target.value)} placeholder="Paste your study notes here..." /></label><div><button className="secondary-button" onClick={() => setPasteOpen(false)}>Cancel</button><button className="primary-button" disabled={!pastedText.trim()} onClick={addPastedText}>Add notes</button></div></div>}<div className="material-list">{kit.materials?.map((file) => <div key={file.id}><div className="file-icon"><FileText size={19} /></div><span><strong>{file.name}</strong><small>{Math.max(1, Math.round(file.size / 1024))} KB</small></span><button className="delete-material" aria-label={`Delete ${file.name}`} onClick={() => removeMaterial(file)}><Trash2 size={17} /></button></div>)}</div></section>}
-    {tab === "guide" && <section className="tab-panel guide-panel">{!kit.guide ? <div className="generate-state"><div><Sparkles /></div><p className="eyebrow">AI STUDY GUIDE</p><h2>Turn your materials into clarity</h2><p>Kivo organizes every uploaded source into a complete, easy-to-review guide.</p><button className="primary-button" disabled={generating} onClick={generate}>{generating ? "Analyzing materials..." : "Generate study guide"}</button></div> : <article className="guide-document"><p className="eyebrow">STUDY GUIDE</p><h2>{kit.guide.title}</h2><p className="guide-intro">{kit.guide.overview}</p>{kit.guide.sections.map((section, index) => <section key={section.heading}><span>0{index + 1}</span><div><h3>{section.heading}</h3><p>{section.content}</p></div></section>)}</article>}</section>}
+    {tab === "guide" && <section className="tab-panel guide-panel">{generating ? <LoadingState label="Creating your study guide from the uploaded materials" /> : !hasMaterials ? <div className="generate-state"><div><FolderOpen /></div><p className="eyebrow">MATERIALS NEEDED</p><h2>Upload materials to begin</h2><p>Add a PDF, Word, PowerPoint, text file, or pasted notes. Kivo will turn them into your study guide.</p><button className="primary-button" onClick={() => setTab("materials")}>Upload materials</button></div> : !kit.guide ? <div className="generate-state"><div><Sparkles /></div><p className="eyebrow">AI STUDY GUIDE</p><h2>Study guide not available yet</h2><p>The summary could not be generated. Check your connection and try again.</p><button className="primary-button" disabled={generating} onClick={generate}>Retry generation</button></div> : <article className="guide-document"><p className="eyebrow">STUDY GUIDE</p><h2>{kit.guide.title}</h2><p className="guide-intro">{kit.guide.overview}</p>{(kit.guide.sections || []).map((section, index) => <section key={section.heading}><span>0{index + 1}</span><div><h3>{section.heading}</h3><p>{section.content}</p></div></section>)}</article>}</section>}
     {tab === "smart" && <SmartPractice kit={kit} />}
     {tab === "test" && <TestView kit={kit} />}
   </div></AppShell>;
@@ -124,10 +132,11 @@ function SmartPractice({ kit }) {
       setQuestions(result.questions || []);
       setQuestionIndex(0);
       setAnswer(null);
+    } catch (error) {
+      window.alert("AI generation failed");
     } finally {
       setLoading(false);
     }
-    catch
   };
   if (!kit.guide) return <section className="tab-panel generate-state"><div><Sparkles /></div><p className="eyebrow">SMART STUDY</p><h2>Generate your study guide first</h2><p>Smart Study creates questions from the summary that is generated from your uploaded notes.</p></section>;
   if (!questions.length) return <section className="tab-panel practice"><div className="practice-card practice-launch"><Sparkles /><h2>Practice from your study guide</h2><p>Questions are generated from the key concepts in your uploaded notes.</p><button className="primary-button" disabled={loading} onClick={loadQuestions}>{loading ? "Generating questions..." : "Start smart study"}</button></div></section>;
@@ -184,6 +193,8 @@ function TestView({ kit }) {
       setQuestionIndex(0);
       setSelected(null);
       setAnswers([]);
+    } catch (error) {
+      window.alert("AI generation failed");
     } finally {
       setLoading(false);
     }
