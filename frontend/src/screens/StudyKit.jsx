@@ -92,7 +92,8 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
       await onUpdate({ ...kit, progress: 25, guide: result.guide });
       setGenerating(false);
     } catch (error) {
-      setGuideError(error.message || "We couldn't generate your study notes. Please try again.");
+      console.error("Study guide generation failed:", error);
+      setGuideError("We couldn't generate your study notes. Please try again.");
       setGenerating(false);
     }
   };
@@ -181,6 +182,7 @@ function SmartPractice({ kit }) {
       setQuestionIndex(0);
       setAnswer(null);
     } catch (error) {
+      console.error("Smart study generation failed:", error);
       window.alert("AI generation failed");
     } finally {
       setLoading(false);
@@ -242,6 +244,7 @@ function TestView({ kit }) {
       setSelected(null);
       setAnswers([]);
     } catch (error) {
+      console.error("Practice test generation failed:", error);
       window.alert("AI generation failed");
     } finally {
       setLoading(false);

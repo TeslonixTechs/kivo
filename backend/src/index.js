@@ -155,7 +155,7 @@ ${source.slice(0, 120000)}`;
     res.json({ provider: "gemini", guide: { title, difficulty, ...generated, sourceCount: materials.length } });
   } catch (error) {
     console.error("AI guide generation failed:", error.message);
-    res.status(502).json({ error: "AI generation failed" });
+    res.status(502).json({ error: error.message });
   }
 });
 
@@ -174,7 +174,7 @@ For Theory questions use 0 options and include a modelAnswer and explanation. MC
     res.json({ questions: generated.questions });
   } catch (error) {
     console.error("AI question generation failed:", error.message);
-    res.status(502).json({ error: "AI generation failed" });
+    res.status(502).json({ error: error.message });
   }
 });
 
