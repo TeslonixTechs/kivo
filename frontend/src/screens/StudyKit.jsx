@@ -92,7 +92,7 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
       await onUpdate({ ...kit, progress: 25, guide: result.guide });
       setGenerating(false);
     } catch (error) {
-      setGuideError("We couldn't generate your study notes. Please try again.");
+      setGuideError(error.message || "We couldn't generate your study notes. Please try again.");
       setGenerating(false);
     }
   };

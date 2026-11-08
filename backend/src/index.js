@@ -38,6 +38,7 @@ async function generateWithGemini(prompt) {
     "gemini-2.5-flash"
   ])].filter(Boolean);
   let lastStatus = 500;
+  let lastError = "";
 
   for (const model of models) {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
@@ -55,10 +56,12 @@ async function generateWithGemini(prompt) {
       return JSON.parse(json);
     }
     lastStatus = response.status;
+    const providerError = await response.json().catch(() => null);
+    lastError = providerError?.error?.message || "";
     if (![404, 400].includes(response.status)) break;
   }
 
-  throw new Error(`Gemini request failed (${lastStatus})`);
+  throw new Error(`Gemini request failed (${lastStatus})${lastError ? `: ${lastError}` : ""}`);
 }
 
 app.post("/api/study-guide", async (req, res) => {
@@ -81,7 +84,12 @@ ${source.slice(0, 120000)}`;
     res.json({ provider: "gemini", guide: { title, difficulty, ...generated, sourceCount: materials.length } });
   } catch (error) {
     console.error("AI guide generation failed:", error.message);
-    res.status(502).json({ error: "AI generation failed" });
+    const providerNotConfigured = error.message === "AI provider is not configured";
+    res.status(providerNotConfigured ? 503 : 502).json({
+      error: providerNotConfigured
+        ? "AI provider is not configured on the server."
+        : "AI generation failed because the configured provider could not complete the request."
+    });
   }
 });
 
