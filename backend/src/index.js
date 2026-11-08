@@ -34,10 +34,10 @@ async function generateWithGemini(prompt) {
   if (!process.env.GEMINI_API_KEY) throw new Error("AI provider is not configured");
   const configuredModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const models = [...new Set([
-    configuredModel,
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
-    "gemini-2.0-flash"
+    "gemini-2.0-flash",
+    ...(configuredModel && !configuredModel.includes("3.8") ? [configuredModel] : [])
   ])].filter(Boolean);
   let lastStatus = 500;
   let lastError = "";
@@ -70,7 +70,6 @@ async function generateWithGemini(prompt) {
     lastStatus = response.status;
     const providerError = await response.json().catch(() => null);
     lastError = providerError?.error?.message || "";
-    if (![404, 400].includes(response.status)) break;
   }
 
   throw new Error(`Gemini request failed (${lastStatus})${lastError ? `: ${lastError}` : ""}`);
