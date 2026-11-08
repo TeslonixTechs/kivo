@@ -35,7 +35,9 @@ async function generateWithGemini(prompt) {
   const configuredModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const models = [...new Set([
     configuredModel,
-    "gemini-2.5-flash"
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash"
   ])].filter(Boolean);
   let lastStatus = 500;
   let lastError = "";
@@ -52,8 +54,18 @@ async function generateWithGemini(prompt) {
     if (response.ok) {
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("");
-      const json = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-      return JSON.parse(json);
+      const json = text
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```$/, "")
+        .trim();
+      try {
+        return JSON.parse(json);
+      } catch {
+        const start = json.indexOf("{");
+        const end = json.lastIndexOf("}");
+        if (start >= 0 && end > start) return JSON.parse(json.slice(start, end + 1));
+        throw new Error("Gemini returned invalid JSON");
+      }
     }
     lastStatus = response.status;
     const providerError = await response.json().catch(() => null);
@@ -88,7 +100,7 @@ ${source.slice(0, 120000)}`;
     res.status(providerNotConfigured ? 503 : 502).json({
       error: providerNotConfigured
         ? "AI provider is not configured on the server."
-        : "AI generation failed because the configured provider could not complete the request."
+        : error.message || "AI generation failed because the configured provider could not complete the request."
     });
   }
 });
