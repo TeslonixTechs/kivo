@@ -38,15 +38,19 @@ async function generateWithGemini(prompt) {
     : configuredModel.startsWith("models/")
       ? configuredModel.slice("models/".length)
       : `gemini-${configuredModel}-flash`;
+  const supportedConfiguredModel = normalizedConfiguredModel.includes("3.8")
+    ? "gemini-2.5-flash"
+    : normalizedConfiguredModel;
   const models = [...new Set([
-    normalizedConfiguredModel,
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
+    supportedConfiguredModel,
   ])].filter(Boolean);
   let lastStatus = 500;
   let lastError = "";
   let capacityStatus = false;
   let capacityError = "";
+  let quotaExceeded = false;
 
   for (const model of models) {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
@@ -80,8 +84,14 @@ async function generateWithGemini(prompt) {
       capacityStatus = true;
       capacityError = lastError;
     }
+    if (response.status === 429 || /quota exceeded|billing details|rate.?limit/i.test(lastError)) {
+      quotaExceeded = true;
+    }
   }
 
+  if (quotaExceeded) {
+    throw new Error("Gemini API quota exceeded. Upgrade billing or use an API key with available quota.");
+  }
   if (capacityStatus) {
     lastStatus = 503;
     lastError = capacityError || lastError;
@@ -110,10 +120,11 @@ ${source.slice(0, 120000)}`;
   } catch (error) {
     console.error("AI guide generation failed:", error.message);
     const providerNotConfigured = error.message === "AI provider is not configured";
-    res.status(providerNotConfigured ? 503 : 502).json({
+    const quotaExceeded = error.message.startsWith("Gemini API quota exceeded");
+    res.status(providerNotConfigured ? 503 : quotaExceeded ? 429 : 502).json({
       error: providerNotConfigured
         ? "AI provider is not configured on the server."
-        : error.message || "AI generation failed because the configured provider could not complete the request."
+        : error.message || "AI generation failed because the configured provider could not complete the request.",
     });
   }
 });
