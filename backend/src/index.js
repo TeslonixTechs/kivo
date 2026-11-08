@@ -43,7 +43,6 @@ async function generateWithGemini(prompt) {
     : normalizedConfiguredModel;
   const models = [...new Set([
     "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
     supportedConfiguredModel,
   ])].filter(Boolean);
   let lastStatus = 500;
