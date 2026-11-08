@@ -7,6 +7,7 @@ import JSZip from "jszip";
 import AppShell from "../components/AppShell";
 import LoadingState from "../components/LoadingState";
 import StudyNotes from "../components/StudyNotes";
+import { apiUrl } from "../lib/api";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -43,7 +44,7 @@ const extractMaterialText = async (material) => {
 };
 
 const requestQuestions = async ({ kit, guide, type = "MCQ", difficulty = "Intermediate", count = 10 }) => {
-  const response = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/questions`, {
+  const response = await fetch(apiUrl("/api/questions"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -78,7 +79,7 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
     setGuideError("");
     try {
       const sourceText = await Promise.all((kit.materials || []).map(extractMaterialText));
-      const response = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/study-guide`, {
+      const response = await fetch(apiUrl("/api/study-guide"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: kit.title, difficulty: kit.difficulty, materials: kit.materials || [], sourceText: sourceText.filter(Boolean).join("\n\n") })

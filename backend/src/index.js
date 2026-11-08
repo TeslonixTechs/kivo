@@ -9,6 +9,16 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL ||
   .map((origin) => origin.trim())
   .map((origin) => origin.replace(/\/$/, ""))
   .filter(Boolean);
+app.use((req, res, next) => {
+  const requestOrigin = req.headers.origin;
+  if (!requestOrigin || allowedOrigins.includes(requestOrigin.replace(/\/$/, "")) || !allowedOrigins.length) {
+    res.header("Access-Control-Allow-Origin", requestOrigin || "*");
+  }
+  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 app.use(cors({
   origin: allowedOrigins.length
     ? (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin.replace(/\/$/, "")))
