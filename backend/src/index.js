@@ -33,14 +33,20 @@ app.get("/api/health", (_req, res) => {
 async function generateWithGemini(prompt) {
   if (!process.env.GEMINI_API_KEY) throw new Error("AI provider is not configured");
   const configuredModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const normalizedConfiguredModel = configuredModel.startsWith("gemini-")
+    ? configuredModel
+    : configuredModel.startsWith("models/")
+      ? configuredModel.slice("models/".length)
+      : `gemini-${configuredModel}-flash`;
   const models = [...new Set([
+    normalizedConfiguredModel,
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
-    "gemini-2.0-flash",
-    ...(configuredModel && !configuredModel.includes("3.8") ? [configuredModel] : [])
   ])].filter(Boolean);
   let lastStatus = 500;
   let lastError = "";
+  let capacityStatus = false;
+  let capacityError = "";
 
   for (const model of models) {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
@@ -70,8 +76,16 @@ async function generateWithGemini(prompt) {
     lastStatus = response.status;
     const providerError = await response.json().catch(() => null);
     lastError = providerError?.error?.message || "";
+    if ([429, 503].includes(response.status)) {
+      capacityStatus = true;
+      capacityError = lastError;
+    }
   }
 
+  if (capacityStatus) {
+    lastStatus = 503;
+    lastError = capacityError || lastError;
+  }
   throw new Error(`Gemini request failed (${lastStatus})${lastError ? `: ${lastError}` : ""}`);
 }
 
