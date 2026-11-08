@@ -7,10 +7,11 @@ const PORT = process.env.PORT || 4000;
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || "")
   .split(",")
   .map((origin) => origin.trim())
+  .map((origin) => origin.replace(/\/$/, ""))
   .filter(Boolean);
 app.use(cors({
   origin: allowedOrigins.length
-    ? (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin))
+    ? (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin.replace(/\/$/, "")))
     : true
 }));
 app.use(express.json({ limit: "10mb" }));
@@ -24,9 +25,8 @@ async function generateWithGemini(prompt) {
   const configuredModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const models = [...new Set([
     configuredModel,
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.0-flash"
+    "gemini-3.8-flash",
+    "gemini-2.5-flash"
   ])].filter(Boolean);
   let lastStatus = 500;
 
