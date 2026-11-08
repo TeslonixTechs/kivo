@@ -53,7 +53,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "https://kivo-gold-kappa.vercel.app/",
+      "/api": "http://localhost:4000",
       "/uploads": "http://localhost:4000",
     },
   },
