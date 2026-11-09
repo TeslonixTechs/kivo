@@ -32,17 +32,17 @@ app.get("/api/health", (_req, res) => {
 
 async function generateWithGemini(prompt) {
   if (!process.env.GEMINI_API_KEY) throw new Error("AI provider is not configured");
-  const configuredModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const configuredModel = process.env.GEMINI_MODEL || "gemini-3.8-flash";
   const normalizedConfiguredModel = configuredModel.startsWith("gemini-")
     ? configuredModel
     : configuredModel.startsWith("models/")
       ? configuredModel.slice("models/".length)
       : `gemini-${configuredModel}-flash`;
   const supportedConfiguredModel = normalizedConfiguredModel.includes("3.8")
-    ? "gemini-2.5-flash"
+    ? "gemini-3.8-flash"
     : normalizedConfiguredModel;
   const models = [...new Set([
-    "gemini-2.5-flash",
+    "gemini-3.8-flash",
     supportedConfiguredModel,
   ])].filter(Boolean);
   let lastStatus = 500;

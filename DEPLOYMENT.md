@@ -9,7 +9,7 @@
 4. Set the start command to `npm start`.
 5. Add these environment variables:
    - `GEMINI_API_KEY`: your Gemini API key
-   - `GEMINI_MODEL`: `gemini-2.5-flash`
+   - `GEMINI_MODEL`: `gemini-3.8-flash`
    - `ALLOWED_ORIGINS`: your deployed frontend URL, for example `https://kivo-app.netlify.app`
 6. Deploy and copy the backend URL, for example `https://kivo-api.onrender.com`.
 
