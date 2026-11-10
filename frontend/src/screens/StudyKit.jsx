@@ -454,7 +454,10 @@ function Flashcards({ kit, onUpdate }) {
     timeStyle: "short",
   }).format(new Date(date));
   const exportDeck = () => {
-    const data = JSON.stringify({ format: "kivo-flashcards", version: 1, title: kit.title, terms }, null, 2);
+    const savedProgress = Object.fromEntries(terms
+      .map(({ term }) => [term.toLocaleLowerCase(), progress[term.toLocaleLowerCase()]])
+      .filter(([, value]) => value));
+    const data = JSON.stringify({ format: "kivo-flashcards", version: 1, title: kit.title, terms, progress: savedProgress }, null, 2);
     const url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -481,6 +484,21 @@ function Flashcards({ kit, onUpdate }) {
       if (imported.some((item) => !item.term || !item.meaning || item.term.length > 300 || item.meaning.length > 3000)) {
         throw new Error("Every card needs a term (up to 300 characters) and definition (up to 3,000 characters).");
       }
+      const importedProgress = data.progress === undefined ? {} : data.progress;
+      if (!importedProgress || typeof importedProgress !== "object" || Array.isArray(importedProgress)) {
+        throw new Error("The review progress in this deck is invalid.");
+      }
+      const importedKeys = new Set(imported.map((item) => item.term.toLocaleLowerCase()));
+      for (const [key, record] of Object.entries(importedProgress)) {
+        const validDate = (value) => value === undefined || (typeof value === "string" && Number.isFinite(new Date(value).getTime()));
+        if (!importedKeys.has(key) || !record || typeof record !== "object"
+          || !Number.isInteger(record.repetitions) || record.repetitions < 0
+          || !Number.isFinite(record.intervalDays) || record.intervalDays < 0
+          || !validDate(record.dueAt) || !validDate(record.lastReviewedAt)
+          || (record.lastRating !== undefined && !["known", "review"].includes(record.lastRating))) {
+          throw new Error("A flashcard review record is invalid.");
+        }
+      }
       const existing = getGuideTerms(kit.guide);
       const merged = [...existing];
       imported.forEach((item) => {
@@ -489,7 +507,14 @@ function Flashcards({ kit, onUpdate }) {
         else merged[index] = item;
       });
       if (merged.length > 1000) throw new Error("This deck would exceed the 1,000-card limit.");
-      await onUpdate({ ...kit, guide: { ...kit.guide, terms: merged } });
+      const mergedProgress = { ...progress };
+      Object.entries(importedProgress).forEach(([key, record]) => {
+        const current = mergedProgress[key];
+        if (!current?.lastReviewedAt || new Date(record.lastReviewedAt || 0) >= new Date(current.lastReviewedAt)) {
+          mergedProgress[key] = record;
+        }
+      });
+      await onUpdate({ ...kit, guide: { ...kit.guide, terms: merged }, flashcardProgress: mergedProgress });
       setTransferMessage(`Imported ${imported.length} card${imported.length === 1 ? "" : "s"}. Existing terms were updated when names matched.`);
     } catch (error) {
       console.error("Flashcard import failed:", error);

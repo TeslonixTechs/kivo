@@ -12,23 +12,21 @@ const downloadBlob = (blob, name) => {
   URL.revokeObjectURL(url);
 };
 
-async function createBackup(profile, kits) {
+async function createBackup(profile, kits, activities) {
   const zip = new JSZip();
   const manifestKits = await Promise.all(kits.map(async (kit) => {
-    const savedMaterials = [];
     const materials = await Promise.all((kit.materials || []).map(async (material) => {
       const { blob, ...metadata } = material;
       if (blob instanceof Blob) {
         const path = `materials/${encodeURIComponent(kit.id)}/${encodeURIComponent(material.id || material.name)}`;
         zip.file(path, blob);
-        savedMaterials.push(path);
         return { ...metadata, backupPath: path };
       }
       return metadata;
     }));
-    return { ...kit, materials, savedMaterials };
+    return { ...kit, materials };
   }));
-  zip.file("manifest.json", JSON.stringify({ format: "kivo-backup", version: 1, exportedAt: new Date().toISOString(), profile, kits: manifestKits }));
+  zip.file("manifest.json", JSON.stringify({ format: "kivo-backup", version: 1, exportedAt: new Date().toISOString(), profile, kits: manifestKits, activities }));
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }
 
@@ -47,6 +45,9 @@ async function readBackup(file) {
     throw new Error("This backup format or version is not supported.");
   }
   if (manifest.kits.length > 1000) throw new Error("This backup contains too many study kits.");
+  if (manifest.activities !== undefined && (!Array.isArray(manifest.activities) || manifest.activities.length > 10000)) {
+    throw new Error("The activity history in this backup is invalid.");
+  }
   const kits = await Promise.all(manifest.kits.map(async (kit) => {
     if (!kit || typeof kit.id !== "string" || typeof kit.title !== "string" || !Array.isArray(kit.materials)) {
       throw new Error("A study kit in this backup is invalid.");
@@ -67,12 +68,18 @@ async function readBackup(file) {
     return { ...kitData, materials };
   }));
   const profile = manifest.profile && typeof manifest.profile === "object" ? manifest.profile : null;
-  return { profile, kits };
+  const activities = (manifest.activities || []).map((item) => {
+    if (!item || typeof item.id !== "string" || typeof item.type !== "string") {
+      throw new Error("An activity record in this backup is invalid.");
+    }
+    return item;
+  });
+  return { profile, kits, activities };
 }
 
 export default function Settings({
   profile, theme, onThemeChange, textScale, onTextScaleChange, highContrast, onHighContrastChange,
-  kits, onRestoreBackup, onNavigate,
+  kits, activities, onRestoreBackup, onNavigate,
 }) {
   const fileInput = useRef(null);
   const [backupBusy, setBackupBusy] = useState(false);
@@ -86,7 +93,7 @@ export default function Settings({
     setBackupBusy(true);
     setBackupMessage("");
     try {
-      const backup = await createBackup(profile, kits);
+      const backup = await createBackup(profile, kits, activities);
       downloadBlob(backup, `kivo-backup-${new Date().toISOString().slice(0, 10)}.zip`);
       setBackupMessage("Your Kivo backup is ready to download.");
     } catch (error) {
@@ -104,7 +111,8 @@ export default function Settings({
     setBackupMessage("");
     try {
       const backup = await readBackup(file);
-      const confirmed = window.confirm(`Restore ${backup.kits.length} study kit${backup.kits.length === 1 ? "" : "s"}? Existing kits will be kept; duplicates will be added as separate copies.`);
+      const profileNotice = backup.profile ? " Your current learning profile will be replaced." : "";
+      const confirmed = window.confirm(`Restore ${backup.kits.length} study kit${backup.kits.length === 1 ? "" : "s"} and ${backup.activities.length} activity record${backup.activities.length === 1 ? "" : "s"}? Existing kits will be kept and duplicates will be added as separate copies.${profileNotice}`);
       if (!confirmed) return;
       await onRestoreBackup(backup);
       setBackupMessage(`Restored ${backup.kits.length} study kit${backup.kits.length === 1 ? "" : "s"}.`);

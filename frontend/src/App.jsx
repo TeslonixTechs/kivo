@@ -64,7 +64,7 @@ export default function App() {
     const saved = await db.activity.add(item);
     setActivities((current) => [...current, saved]);
   };
-  const restoreBackup = async ({ profile: importedProfile, kits: importedKits }) => {
+  const restoreBackup = async ({ profile: importedProfile, kits: importedKits, activities: importedActivities = [] }) => {
     const existingIds = new Set(kits.map((kit) => kit.id));
     const restoredKits = importedKits.map((kit) => {
       const restored = existingIds.has(kit.id) ? { ...kit, id: crypto.randomUUID() } : kit;
@@ -72,9 +72,19 @@ export default function App() {
       return restored;
     });
     for (const kit of restoredKits) await db.kits.save(kit);
-    if (!profile && importedProfile) await db.profile.save(importedProfile);
+    if (importedProfile) {
+      await db.profile.save(importedProfile);
+      setProfile(importedProfile);
+    }
+    const activityIds = new Set(activities.map((item) => item.id));
+    const restoredActivities = [];
+    for (const activity of importedActivities) {
+      if (activityIds.has(activity.id)) continue;
+      activityIds.add(activity.id);
+      restoredActivities.push(await db.activity.add(activity));
+    }
     setKits((current) => [...restoredKits, ...current]);
-    if (!profile && importedProfile) setProfile(importedProfile);
+    setActivities((current) => [...restoredActivities, ...current]);
   };
   const deleteKit = async (id) => {
     await db.kits.remove(id);
@@ -88,7 +98,7 @@ export default function App() {
   if (!profile) return <Onboarding onComplete={completeOnboarding} />;
   if (screen === "kit" && selected) return <StudyKit kit={selected} onNavigate={setScreen} onUpdate={updateKit} />;
   if (screen === "create") return <CreateKit onNavigate={setScreen} onCreated={createKit} />;
-  if (screen === "settings") return <Settings profile={profile} theme={theme} onThemeChange={setTheme} textScale={textScale} onTextScaleChange={setTextScale} highContrast={highContrast} onHighContrastChange={setHighContrast} kits={kits} onRestoreBackup={restoreBackup} onNavigate={setScreen} />;
+  if (screen === "settings") return <Settings profile={profile} theme={theme} onThemeChange={setTheme} textScale={textScale} onTextScaleChange={setTextScale} highContrast={highContrast} onHighContrastChange={setHighContrast} kits={kits} activities={activities} onRestoreBackup={restoreBackup} onNavigate={setScreen} />;
   if (screen === "tools") return <Tools kits={kits} activities={activities} onUpdateKit={updateKit} onAddActivity={addActivity} onOpenKit={(kit) => { setSelected(kit); setScreen("kit"); }} onNavigate={setScreen} />;
   return <Dashboard profile={profile} kits={kits} activities={activities} streak={0} onNavigate={setScreen} onCreate={() => setScreen("create")} onDeleteKit={deleteKit} onOpenKit={(kit) => { setSelected(kit); setScreen("kit"); }} />;
 }

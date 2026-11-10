@@ -16,16 +16,27 @@ const getWeakTopics = (kit) => {
   return [...topics.entries()].sort((a, b) => b[1] - a[1]);
 };
 
+const getGuideTermNames = (guide) => {
+  const terms = [...(guide?.terms || []), ...(guide?.sections || []).flatMap((section) => section.keyTerms || [])]
+    .map((item) => String(item.term || item.word || "").trim())
+    .filter(Boolean);
+  return terms.filter((term, index) => terms.findIndex((value) => value.toLocaleLowerCase() === term.toLocaleLowerCase()) === index);
+};
+
 function Planner({ kits, onUpdateKit, onOpenKit }) {
   const [selectedId, setSelectedId] = useState(kits[0]?.id || "");
   const kit = kits.find((item) => item.id === selectedId) || kits[0];
   if (!kits.length) return <div className="tools-empty"><CalendarDays /><h2>No study kits yet</h2><p>Create a study kit to plan your exam preparation.</p></div>;
   const today = startOfDay(new Date());
   const examDate = kit.examDate ? startOfDay(`${kit.examDate}T00:00:00`) : null;
+  const examPassed = Boolean(examDate && examDate < today);
   const daysUntil = examDate ? Math.max(0, Math.ceil((examDate - today) / 86400000)) : 0;
   const sections = (kit.guide?.sections || []).filter((section) => section.heading || section.content);
   const weakTopics = getWeakTopics(kit).slice(0, 4);
-  const dueCount = Object.values(kit.flashcardProgress || {}).filter((item) => !item.dueAt || new Date(item.dueAt) <= new Date()).length;
+  const dueCount = getGuideTermNames(kit.guide).filter((term) => {
+    const dueAt = kit.flashcardProgress?.[term.toLocaleLowerCase()]?.dueAt;
+    return !dueAt || new Date(dueAt) <= new Date();
+  }).length;
   const tasks = [
     ...sections.map((section) => `Review: ${section.heading || "Study guide section"}`),
     ...weakTopics.map(([topic]) => `Revisit: ${topic}`),
@@ -45,8 +56,8 @@ function Planner({ kits, onUpdateKit, onOpenKit }) {
       <header className="tool-heading"><div><p className="eyebrow">PLAN YOUR PREP</p><h2>Study planner</h2><p>Set an exam date to pace your guide sections, due cards, and topics to revisit.</p></div>
         <label>Study kit<select value={kit.id} onChange={(event) => setSelectedId(event.target.value)}>{kits.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
       </header>
-      <section className="tool-card planner-date"><CalendarDays /><label htmlFor="exam-date">Exam date</label><input id="exam-date" type="date" value={kit.examDate || ""} onChange={saveExamDate} /><span>{examDate ? `${daysUntil} day${daysUntil === 1 ? "" : "s"} to go` : "Choose a date to build your plan"}</span></section>
-      {!kit.guide ? <p className="tool-note">Generate a study guide to plan your sections and key concepts.</p> : tasks.length ? (
+      <section className="tool-card planner-date"><CalendarDays /><label htmlFor="exam-date">Exam date</label><input id="exam-date" type="date" min={`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`} value={kit.examDate || ""} onChange={saveExamDate} /><span>{examPassed ? "This exam date has passed" : examDate ? `${daysUntil} day${daysUntil === 1 ? "" : "s"} to go` : "Choose a date to build your plan"}</span></section>
+      {!kit.guide ? <p className="tool-note">Generate a study guide to plan your sections and key concepts.</p> : !examDate ? <p className="tool-note">Choose your exam date to see a day-by-day study plan.</p> : examPassed ? <p className="tool-note">Choose a future exam date to build a new plan.</p> : tasks.length ? (
         <section className="tool-card plan-card"><div className="tool-card-heading"><h3>Your plan</h3><span>{tasks.length} study tasks</span></div>
           <ul className="plan-list">{plan.map(({ task, date }, index) => <li key={`${task}-${index}`}><span className="plan-date">{date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span><span>{task}</span></li>)}</ul>
         </section>
