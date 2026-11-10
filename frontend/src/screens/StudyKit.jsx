@@ -146,6 +146,7 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
         ...(section.points || []),
         ...(section.keyTerms || []).map((term) => `${term.term || term.word}: ${term.meaning}`)
       ]),
+      ...(guide.terms || []).map((term) => `${term.term || term.word}: ${term.meaning}`),
       ...(guide.quickRevision || [])
     ].filter(Boolean).join("\n\n");
     await navigator.clipboard.writeText(notes);
@@ -364,6 +365,29 @@ function GuideEditor({ guide, onChange }) {
           </div>
         </section>
       ))}
+      <div className="guide-editor-terms">
+        <span>Additional defined terms</span>
+        {(guide.terms || []).map((term, termIndex) => (
+          <div className="guide-editor-term" key={termIndex}>
+            <input aria-label="Term" value={term.term || term.word || ""} onChange={(event) => onChange({
+              ...guide,
+              terms: updateTerms(guide.terms || [], { index: termIndex, field: term.term === undefined ? "word" : "term", value: event.target.value }),
+            })} />
+            <textarea aria-label={`Definition of ${term.term || term.word}`} value={term.meaning || ""} onChange={(event) => onChange({
+              ...guide,
+              terms: updateTerms(guide.terms || [], { index: termIndex, field: "meaning", value: event.target.value }),
+            })} />
+            <button type="button" className="delete-material" aria-label="Remove term" onClick={() => onChange({
+              ...guide,
+              terms: (guide.terms || []).filter((_, index) => index !== termIndex),
+            })}><Trash2 size={15} /></button>
+          </div>
+        ))}
+        <button type="button" className="secondary-button" onClick={() => onChange({
+          ...guide,
+          terms: [...(guide.terms || []), { term: "", meaning: "" }],
+        })}>Add defined term</button>
+      </div>
       <button type="button" className="secondary-button" onClick={addSection}>Add section</button>
       <label>
         Quick revision <span className="guide-editor-hint">One item per line</span>
