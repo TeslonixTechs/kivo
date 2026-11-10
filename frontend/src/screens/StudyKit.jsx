@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ArrowLeft, BookOpen, CircleHelp, Download, FileText, FolderOpen, Sparkles, Trash2, UploadCloud } from "lucide-react";
+import { ArrowLeft, BookOpen, Check, CircleHelp, Download, FileText, FolderOpen, RotateCcw, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import mammoth from "mammoth/mammoth.browser";
@@ -60,6 +60,18 @@ const requestQuestions = async ({ kit, guide, type = "MCQ", difficulty = "Interm
     throw new Error(error.error || "Question generation failed.");
   }
   return response.json();
+};
+
+const getGuideTerms = (guide) => {
+  const terms = [...(guide?.terms || []), ...(guide?.sections || []).flatMap((section) => section.keyTerms || [])]
+    .map((item) => ({
+      term: String(item.term || item.word || "").trim(),
+      meaning: String(item.meaning || "").trim(),
+    }))
+    .filter((item) => item.term && item.meaning);
+  return terms.filter((item, index, list) => (
+    list.findIndex((entry) => entry.term.toLocaleLowerCase() === item.term.toLocaleLowerCase()) === index
+  ));
 };
 
 export default function StudyKit({ kit, onNavigate, onUpdate }) {
@@ -198,7 +210,7 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
     pdf.save(`${filename}.pdf`);
   };
 
-  const tabs = [["guide", BookOpen, "Study guide"], ["materials", FolderOpen, "Materials"], ["smart", Sparkles, "Smart study"], ["test", CircleHelp, "Test"]];
+  const tabs = [["guide", BookOpen, "Study guide"], ["materials", FolderOpen, "Materials"], ["flashcards", RotateCcw, "Flashcards"], ["smart", Sparkles, "Smart study"], ["test", CircleHelp, "Test"]];
   const hasMaterials = (kit.materials || []).length > 0;
   const activityScore = Math.min(100, (kit.progress || 0) + (kit.guide ? 25 : 0) + (hasMaterials ? 15 : 0));
   return <AppShell page="kits" onNavigate={onNavigate}><div className="study-page"><button className="back-link kit-back" onClick={() => onNavigate("dashboard")}><ArrowLeft size={16} /> All kits</button><header className="kit-heading"><div><p className="eyebrow">{kit.difficulty} study kit</p><h1>{kit.title}</h1></div><div className="kit-progress" aria-label={`${activityScore}% activity, performance, and consistency score`}><span>{activityScore}% study progress</span><div><i style={{ width: `${activityScore}%` }} /></div></div></header><nav className="study-tabs">{tabs.map(([id, Icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><Icon size={18} /><span>{label}</span></button>)}</nav>
@@ -234,9 +246,125 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
         )}
       </section>
     )}
+    {tab === "flashcards" && <Flashcards kit={kit} onUpdate={onUpdate} />}
     {tab === "smart" && <SmartPractice kit={kit} />}
     {tab === "test" && <TestView kit={kit} />}
   </div></AppShell>;
+}
+
+function Flashcards({ kit, onUpdate }) {
+  const [revealed, setRevealed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const terms = getGuideTerms(kit.guide);
+  const progress = kit.flashcardProgress || {};
+  const now = Date.now();
+  const dueCards = terms.filter(({ term }) => {
+    const dueAt = progress[term.toLocaleLowerCase()]?.dueAt;
+    return !dueAt || new Date(dueAt).getTime() <= now;
+  });
+  const nextDue = terms
+    .map(({ term }) => progress[term.toLocaleLowerCase()]?.dueAt)
+    .filter((dueAt) => dueAt && new Date(dueAt).getTime() > now)
+    .sort((a, b) => new Date(a) - new Date(b))[0];
+  const card = dueCards[0];
+  const formatDueDate = (date) => new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(date));
+
+  const rateCard = async (knewIt) => {
+    if (!card || saving) return;
+    setSaving(true);
+    setSaveError("");
+    const key = card.term.toLocaleLowerCase();
+    const previous = progress[key] || { repetitions: 0, intervalDays: 0 };
+    const repetitions = knewIt ? previous.repetitions + 1 : 0;
+    const intervalDays = knewIt
+      ? previous.repetitions === 0
+        ? 1
+        : previous.repetitions === 1
+          ? 3
+          : Math.max(1, Math.round(previous.intervalDays * 2.5))
+      : 0;
+    const dueAt = knewIt
+      ? new Date(now + intervalDays * 24 * 60 * 60 * 1000)
+      : new Date(now + 10 * 60 * 1000);
+    try {
+      await onUpdate({
+        ...kit,
+        flashcardProgress: {
+          ...progress,
+          [key]: {
+            repetitions,
+            intervalDays,
+            dueAt: dueAt.toISOString(),
+            lastReviewedAt: new Date(now).toISOString(),
+            lastRating: knewIt ? "known" : "review",
+          },
+        },
+      });
+      setRevealed(false);
+    } catch (error) {
+      console.error("Flashcard progress could not be saved:", error);
+      setSaveError("Your review could not be saved. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!kit.guide) {
+    return <section className="tab-panel generate-state"><div><Sparkles /></div><p className="eyebrow">FLASHCARDS</p><h2>Generate your study guide first</h2><p>Flashcards are created from the defined terms in your study guide.</p></section>;
+  }
+  if (!terms.length) {
+    return <section className="tab-panel generate-state"><div><BookOpen /></div><p className="eyebrow">FLASHCARDS</p><h2>No key terms yet</h2><p>Regenerate the study guide to create flashcards from its definitions.</p></section>;
+  }
+  if (!card) {
+    return (
+      <section className="tab-panel flashcards-panel">
+        <div className="flashcards-summary"><strong>{terms.length} terms</strong><span>All caught up for now.</span></div>
+        <div className="flashcard-empty">
+          <Check size={24} />
+          <h2>Great work!</h2>
+          <p>There are no cards due right now.</p>
+          {nextDue && <span>Next review: {formatDueDate(nextDue)}</span>}
+        </div>
+      </section>
+    );
+  }
+  const cardProgress = progress[card.term.toLocaleLowerCase()] || {};
+  return (
+    <section className="tab-panel flashcards-panel">
+      <div className="flashcards-summary">
+        <strong>{dueCards.length} due</strong>
+        <span>{terms.length} terms in this deck</span>
+      </div>
+      <button
+        type="button"
+        className={`flashcard${revealed ? " is-revealed" : ""}`}
+        onClick={() => setRevealed((value) => !value)}
+        aria-label={revealed ? `Definition: ${card.meaning}. Click to show term.` : `Show definition for ${card.term}`}
+      >
+        <span className="eyebrow">{revealed ? "DEFINITION" : "TERM"}</span>
+        <strong>{revealed ? card.meaning : card.term}</strong>
+        <span className="flashcard-hint">{revealed ? "Tap to show the term" : "Tap to reveal the definition"}</span>
+      </button>
+      <p className="flashcard-review-count">
+        {cardProgress.repetitions ? `Known through ${cardProgress.repetitions} review${cardProgress.repetitions === 1 ? "" : "s"}` : "New card"}
+      </p>
+      {revealed && (
+        <div className="flashcard-actions">
+          <button type="button" className="secondary-button" disabled={saving} onClick={() => rateCard(false)}>
+            <RotateCcw size={16} /> Review it
+          </button>
+          <button type="button" className="primary-button" disabled={saving} onClick={() => rateCard(true)}>
+            <Check size={16} /> Know it
+          </button>
+        </div>
+      )}
+      {saveError && <p className="flashcard-error" role="alert">{saveError}</p>}
+    </section>
+  );
 }
 
 function SmartPractice({ kit }) {

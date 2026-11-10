@@ -111,6 +111,26 @@ button { cursor: pointer; }
 .guide-empty-card .guide-error { color:#d95b72;margin-bottom:4px; }
 .guide-actions { max-width:820px;margin:0 auto 12px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px; }
 .guide-download { display:inline-flex;align-items:center;justify-content:center;gap:8px; }
+.flashcards-panel { max-width:680px;margin:0 auto; }
+.flashcards-summary { display:flex;align-items:center;justify-content:space-between;color:#929bb5;font-size:12px; }
+.flashcards-summary strong { color:#7c3aed; }
+.flashcard { width:100%;min-height:290px;margin-top:18px;padding:32px;border:1px solid #e2e5ef;border-radius:20px;background:#fff;color:#0b0f24;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-shadow:0 15px 40px rgba(11,15,36,.07);transition:transform .2s ease,border-color .2s ease,background .2s ease; }
+.flashcard:hover { transform:translateY(-2px);border-color:#a78bfa; }
+.flashcard.is-revealed { background:#f6f3ff;border-color:#c4b5fd; }
+.flashcard > strong { max-width:540px;margin:22px 0;font-family:Georgia,serif;font-size:27px;line-height:1.45; }
+.flashcard-hint { color:#929bb5;font-size:12px; }
+.flashcard-review-count { color:#929bb5;text-align:center;font-size:11px; }
+.flashcard-actions { display:flex;justify-content:center;gap:12px;margin-top:18px; }
+.flashcard-actions button { min-width:140px; }
+.flashcard-actions .secondary-button { display:inline-flex;align-items:center;justify-content:center;gap:8px; }
+.flashcard-error { color:#d95b72;text-align:center;font-size:12px; }
+.flashcard-empty { min-height:270px;margin-top:18px;padding:28px;border:1px solid #e2e5ef;border-radius:20px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center; }
+.flashcard-empty > svg { color:#00a884; }
+.flashcard-empty h2 { margin:12px 0 4px;font-family:Georgia,serif; }
+.flashcard-empty p,.flashcard-empty > span { color:#929bb5;font-size:13px; }
+:root[data-theme="dark"] .flashcard,:root[data-theme="dark"] .flashcard-empty { background:#171d38;color:#fff;border-color:#343b63; }
+:root[data-theme="dark"] .flashcard.is-revealed { background:#202047;border-color:#7c3aed; }
+@media (max-width:640px) { .flashcard { min-height:250px;padding:24px 18px; }.flashcard > strong { font-size:23px; }.flashcard-actions { gap:8px; }.flashcard-actions button { min-width:0;flex:1;padding:0 12px; } }
 .study-note-section { grid-template-columns:1fr !important; }
 .study-note-section > div { position:relative;padding-left:0; }
 .study-note-section .study-note-number { color:#7c3aed;font-size:12px; }
