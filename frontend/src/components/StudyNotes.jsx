@@ -1,13 +1,78 @@
-import React from "react";
+import React, { useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function StudyTerm({ term, meaning }) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef(null);
+  const popupRef = useRef(null);
+  const popupId = useId();
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const updatePosition = () => {
+      if (!buttonRef.current || !popupRef.current) return;
+      const anchor = buttonRef.current.getBoundingClientRect();
+      const popup = popupRef.current.getBoundingClientRect();
+      const padding = 12;
+      const left = Math.min(
+        Math.max(padding, anchor.left),
+        Math.max(padding, window.innerWidth - popup.width - padding)
+      );
+      const below = anchor.bottom + 8;
+      const top = below + popup.height <= window.innerHeight - padding
+        ? below
+        : Math.max(padding, anchor.top - popup.height - 8);
+      setPosition({ top, left });
+    };
+    const closeOnOutsideClick = (event) => {
+      if (!buttonRef.current?.contains(event.target) && !popupRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
   return (
-    <details className="study-term">
-      <summary aria-label={`Show definition of ${term}`}>{term}</summary>
-      <span className="study-term-popover" role="tooltip">{meaning}</span>
-    </details>
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="study-term-trigger"
+        aria-label={`Show definition of ${term}`}
+        aria-expanded={open}
+        aria-controls={open ? popupId : undefined}
+        onClick={() => setOpen((value) => !value)}
+      >{term}</button>
+      {open && createPortal(
+        <span
+          ref={popupRef}
+          id={popupId}
+          className="study-term-popover"
+          role="tooltip"
+          style={{ top: position.top, left: position.left }}
+        >{meaning}</span>,
+        document.body
+      )}
+    </>
   );
 }
 
