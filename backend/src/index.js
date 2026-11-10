@@ -103,13 +103,21 @@ app.post("/api/study-guide", async (req, res) => {
   const source = sourceText.trim();
   try {
     if (!source) throw new Error("No material text was provided");
-    const prompt = `Create concise, detailed study notes from the uploaded class material for "${title}" at ${difficulty} level.
+    const detailInstructions = {
+      beginner: "Use plain language and explain foundational ideas step by step. Keep each section concise, define unfamiliar terms clearly, and include simple examples only when supported by the source.",
+      intermediate: "Give clear explanations with enough context to understand each important idea. Define technical terms and connect related concepts without unnecessary detail.",
+      advanced: "Give thorough explanations of mechanisms, relationships, and implications in the source. Preserve important nuance and define specialized terminology.",
+      expert: "Give the most comprehensive treatment supported by the source, including technical detail, assumptions, relationships, and subtle distinctions. Define specialized terminology precisely.",
+    };
+    const detailInstruction = detailInstructions[String(difficulty).trim().toLowerCase()] || detailInstructions.intermediate;
+    const prompt = `Create study notes from the uploaded class material for "${title}" at ${difficulty} level.
 
 Use only the supplied material. Identify the real lecture topics and explain every important idea.
+${detailInstruction}
 Return only valid JSON:
 {"title":"topic-based title","overview":"short summary of the material","sections":[{"heading":"actual topic","content":"clear explanation","points":["important bullet point","another bullet point"],"keyTerms":[{"term":"key term","meaning":"meaning"}]}],"quickRevision":["revision point 1","revision point 2"]}
 
-Make key terms and important facts bold using Markdown **double asterisks** inside strings. Do not use generic headings or invented content.
+Include challenging or technical terms in section keyTerms with a concise, accurate definition grounded in the uploaded material. Make key terms and important facts bold using Markdown **double asterisks** inside strings. Do not use generic headings or invented content.
 
 Uploaded material:
 ${source.slice(0, 120000)}`;

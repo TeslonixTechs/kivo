@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ArrowLeft, BookOpen, CircleHelp, FileText, FolderOpen, Sparkles, Trash2, UploadCloud } from "lucide-react";
+import { ArrowLeft, BookOpen, CircleHelp, Download, FileText, FolderOpen, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import mammoth from "mammoth/mammoth.browser";
@@ -126,6 +126,66 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   };
+  const downloadGuide = () => {
+    const guide = kit.guide;
+    const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    })[character]);
+    const formatHtmlText = (value) => escapeHtml(value)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\n/g, "<br>");
+    const sections = (guide.sections || []).map((section) => `
+      <section>
+        <h2>${formatHtmlText(section.heading)}</h2>
+        ${section.content ? `<p>${formatHtmlText(section.content)}</p>` : ""}
+        ${section.points?.length ? `<ul>${section.points.map((point) => `<li>${formatHtmlText(point)}</li>`).join("")}</ul>` : ""}
+        ${section.keyTerms?.length ? `<h3>Key terms</h3><dl>${section.keyTerms.map((term) => `<dt>${formatHtmlText(term.term || term.word)}</dt><dd>${formatHtmlText(term.meaning)}</dd>`).join("")}</dl>` : ""}
+      </section>
+    `).join("");
+    const quickRevision = guide.quickRevision?.length
+      ? `<section><h2>Quick revision</h2><ul>${guide.quickRevision.map((item) => `<li>${formatHtmlText(item)}</li>`).join("")}</ul></section>`
+      : "";
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(guide.title || kit.title)}</title>
+  <style>
+    :root{font:16px/1.65 system-ui,sans-serif;color:#172033;background:#f5f7ff}
+    body{max-width:820px;margin:40px auto;padding:36px;background:#fff;border-radius:16px}
+    h1,h2{font-family:Georgia,serif;line-height:1.25}h1{font-size:2.2rem}
+    h2{margin-top:2rem;border-top:1px solid #e5e7ef;padding-top:1rem}
+    .meta{color:#7c3aed;font-weight:700}p,li,dd{color:#505b73}
+    dt{margin-top:1rem;color:#7c3aed;font-weight:700}dd{margin-left:0}
+    @media print{body{max-width:none;margin:0;padding:0;border-radius:0}h2{break-after:avoid}}
+  </style>
+</head>
+<body>
+  <p class="meta">${escapeHtml(guide.difficulty || kit.difficulty)} study guide</p>
+  <h1>${escapeHtml(guide.title || kit.title)}</h1>
+  ${guide.overview ? `<p>${formatHtmlText(guide.overview)}</p>` : ""}
+  ${sections}
+  ${quickRevision}
+</body>
+</html>`;
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const link = document.createElement("a");
+    const filename = String(guide.title || kit.title || "study-guide")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "study-guide";
+    link.href = url;
+    link.download = `${filename}.html`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   const tabs = [["guide", BookOpen, "Study guide"], ["materials", FolderOpen, "Materials"], ["smart", Sparkles, "Smart study"], ["test", CircleHelp, "Test"]];
   const hasMaterials = (kit.materials || []).length > 0;
@@ -147,6 +207,7 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
             <div className="guide-actions">
               <button className="secondary-button" disabled={generating} onClick={generate}>Regenerate</button>
               <button className="primary-button" onClick={copyNotes}>{copied ? "Copied!" : "Copy notes"}</button>
+              <button className="secondary-button guide-download" onClick={downloadGuide}><Download size={16} /> Download guide</button>
             </div>
             <StudyNotes guide={kit.guide} />
           </div>
