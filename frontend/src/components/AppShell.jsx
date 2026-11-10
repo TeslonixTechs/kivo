@@ -1,11 +1,12 @@
-import { BookOpen, Flame, LayoutDashboard, Settings } from "lucide-react";
+import { BookOpen, LayoutDashboard, Settings, Wrench } from "lucide-react";
 import Logo from "./Logo";
 import PwaExperience from "./PwaExperience";
 
 export default function AppShell({ children, page, onNavigate }) {
   const nav = [
     ["dashboard", LayoutDashboard, "Home"],
-    ["kits", BookOpen, "Study kits"]
+    ["kits", BookOpen, "Study kits"],
+    ["tools", Wrench, "Tools"]
   ];
   return (
     <div className="app-shell">

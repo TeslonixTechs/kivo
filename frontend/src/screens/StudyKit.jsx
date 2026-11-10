@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BookOpen, Check, CircleHelp, Download, FileText, FolderOpen, RotateCcw, Sparkles, Trash2, UploadCloud } from "lucide-react";
+import { ArrowLeft, BookOpen, Check, CircleHelp, Download, FileText, FolderOpen, RotateCcw, Sparkles, Trash2, UploadCloud, Volume2, VolumeX } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import mammoth from "mammoth/mammoth.browser";
@@ -82,6 +82,7 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
   const [editingGuide, setEditingGuide] = useState(false);
   const [guideDraft, setGuideDraft] = useState(null);
   const [guideSaveError, setGuideSaveError] = useState("");
+  const [readingAloud, setReadingAloud] = useState(false);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const input = useRef(null);
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -96,6 +97,7 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+  useEffect(() => () => window.speechSynthesis?.cancel(), []);
   const addFiles = (files) => {
     const materials = [...files].map((file) => ({ id: crypto.randomUUID(), name: file.name, size: file.size, type: file.type, blob: file, createdAt: new Date().toISOString() }));
     onUpdate({ ...kit, materials: [...(kit.materials || []), ...materials] });
@@ -152,6 +154,30 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
     await navigator.clipboard.writeText(notes);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
+  };
+  const toggleReadAloud = () => {
+    if (!window.speechSynthesis) return;
+    if (readingAloud) {
+      window.speechSynthesis.cancel();
+      setReadingAloud(false);
+      return;
+    }
+    const guide = kit.guide;
+    const content = [
+      guide.title,
+      guide.overview,
+      ...(guide.sections || []).flatMap((section) => [
+        section.heading, section.content, ...(section.points || []),
+        ...(section.keyTerms || []).map((term) => `${term.term || term.word}: ${term.meaning}`),
+      ]),
+      ...(guide.terms || []).map((term) => `${term.term || term.word}: ${term.meaning}`),
+      ...(guide.quickRevision || []),
+    ].filter(Boolean).join(". ");
+    const utterance = new SpeechSynthesisUtterance(content);
+    utterance.onend = () => setReadingAloud(false);
+    utterance.onerror = () => setReadingAloud(false);
+    setReadingAloud(true);
+    window.speechSynthesis.speak(utterance);
   };
   const startGuideEdit = () => {
     setGuideDraft(structuredClone(kit.guide));
@@ -267,6 +293,7 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
               ) : (
                 <>
                   <button className="secondary-button" onClick={startGuideEdit}>Edit guide</button>
+                  <button className="secondary-button" onClick={toggleReadAloud} disabled={!window.speechSynthesis}>{readingAloud ? <VolumeX size={16} /> : <Volume2 size={16} />}{readingAloud ? "Stop reading" : "Read aloud"}</button>
                   <button className="secondary-button" disabled={generating || !isOnline} onClick={generate}>Regenerate</button>
                   <button className="primary-button" onClick={copyNotes}>{copied ? "Copied!" : "Copy notes"}</button>
                   <button className="secondary-button guide-download" onClick={downloadGuide}><Download size={16} /> Download PDF</button>
@@ -401,6 +428,8 @@ function Flashcards({ kit, onUpdate }) {
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [transferMessage, setTransferMessage] = useState("");
+  const importInput = useRef(null);
   const [studyAll, setStudyAll] = useState(false);
   const [reviewedNow, setReviewedNow] = useState([]);
   const terms = getGuideTerms(kit.guide);
@@ -424,6 +453,57 @@ function Flashcards({ kit, onUpdate }) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(date));
+  const exportDeck = () => {
+    const data = JSON.stringify({ format: "kivo-flashcards", version: 1, title: kit.title, terms }, null, 2);
+    const url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${kit.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "study-kit"}-flashcards.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setTransferMessage("Flashcards exported.");
+  };
+  const importDeck = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setTransferMessage("");
+    try {
+      if (file.size > 2 * 1024 * 1024) throw new Error("Choose a flashcard JSON file smaller than 2 MB.");
+      const data = JSON.parse(await file.text());
+      if (data.format !== "kivo-flashcards" || data.version !== 1 || !Array.isArray(data.terms) || data.terms.length > 500) {
+        throw new Error("This flashcard file is invalid or uses an unsupported format.");
+      }
+      const imported = data.terms.map((item) => ({
+        term: String(item?.term || "").trim(),
+        meaning: String(item?.meaning || "").trim(),
+      }));
+      if (imported.some((item) => !item.term || !item.meaning || item.term.length > 300 || item.meaning.length > 3000)) {
+        throw new Error("Every card needs a term (up to 300 characters) and definition (up to 3,000 characters).");
+      }
+      const existing = getGuideTerms(kit.guide);
+      const merged = [...existing];
+      imported.forEach((item) => {
+        const index = merged.findIndex((entry) => entry.term.toLocaleLowerCase() === item.term.toLocaleLowerCase());
+        if (index < 0) merged.push(item);
+        else merged[index] = item;
+      });
+      if (merged.length > 1000) throw new Error("This deck would exceed the 1,000-card limit.");
+      await onUpdate({ ...kit, guide: { ...kit.guide, terms: merged } });
+      setTransferMessage(`Imported ${imported.length} card${imported.length === 1 ? "" : "s"}. Existing terms were updated when names matched.`);
+    } catch (error) {
+      console.error("Flashcard import failed:", error);
+      setTransferMessage(error.message || "The flashcard file could not be imported.");
+    }
+  };
+  const transferControls = (
+    <div className="flashcard-transfer">
+      <button type="button" className="secondary-button" onClick={exportDeck} disabled={!terms.length}><Download size={16} /> Export JSON</button>
+      <button type="button" className="secondary-button" onClick={() => importInput.current?.click()}><UploadCloud size={16} /> Import JSON</button>
+      <input ref={importInput} type="file" accept="application/json,.json" hidden onChange={importDeck} />
+      {transferMessage && <span role="status">{transferMessage}</span>}
+    </div>
+  );
 
   const rateCard = async (knewIt) => {
     if (!card || saving) return;
@@ -470,11 +550,12 @@ function Flashcards({ kit, onUpdate }) {
     return <section className="tab-panel generate-state"><div><Sparkles /></div><p className="eyebrow">FLASHCARDS</p><h2>Generate your study guide first</h2><p>Flashcards are created from the defined terms in your study guide.</p></section>;
   }
   if (!terms.length) {
-    return <section className="tab-panel generate-state"><div><BookOpen /></div><p className="eyebrow">FLASHCARDS</p><h2>No key terms yet</h2><p>Regenerate the study guide to create flashcards from its definitions.</p></section>;
+    return <section className="tab-panel flashcards-panel"><div className="generate-state"><div><BookOpen /></div><p className="eyebrow">FLASHCARDS</p><h2>No key terms yet</h2><p>Import a deck or add defined terms to your study guide.</p></div>{transferControls}</section>;
   }
   if (!card) {
     return (
       <section className="tab-panel flashcards-panel">
+        {transferControls}
         <div className="flashcards-summary">
           <strong>{knownCount} / {terms.length} known</strong>
           <span>{reviewedCount} reviewed · {dueCards.length} due</span>
