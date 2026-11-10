@@ -167,10 +167,14 @@ app.post("/api/questions", async (req, res) => {
 ${source.slice(0, 120000)}
 
 Return valid JSON as {"questions":[{"prompt":string,"options":[4 strings],"answer":number,"explanation":string}]}.
+For every question, explanation is required and must briefly explain why the correct option is right, using the supplied study summary.
 For Theory questions use 0 options and include a modelAnswer and explanation. MCQ answer must be the zero-based index of the correct option. Include varied concepts, applications, comparisons, and details from the summary.`;
   try {
     const generated = await generateWithGemini(prompt);
     if (!Array.isArray(generated.questions) || !generated.questions.length) throw new Error("Invalid AI response");
+    if (generated.questions.some((question) => typeof question.explanation !== "string" || !question.explanation.trim())) {
+      throw new Error("AI returned questions without explanations");
+    }
     res.json({ questions: generated.questions });
   } catch (error) {
     console.error("AI question generation failed:", error.message);

@@ -208,6 +208,16 @@ function SmartPractice({ kit }) {
       <div className="practice-card">
         <span className="eyebrow">QUESTION {questionIndex + 1}</span>
         <h2>{question.prompt}</h2>
+        {answer !== null && (
+          <div
+            className={`answer-feedback ${answer === question.answer ? "correct" : "wrong"}`}
+            role="status"
+            aria-live="polite"
+          >
+            <strong>{answer === question.answer ? "Exactly right!" : "Not quite."}</strong>{" "}
+            {question.explanation}
+          </div>
+        )}
         <div>
           {question.options.map((option, index) => (
             <button key={option} className={answer !== null && index === question.answer ? "correct" : answer === index ? "wrong" : ""} onClick={() => chooseAnswer(index)}>
@@ -215,7 +225,6 @@ function SmartPractice({ kit }) {
             </button>
           ))}
         </div>
-        {answer !== null && <div className="answer-feedback">{answer === question.answer ? "Exactly right!" : "Not quite."} The strongest answer connects the central idea with evidence.</div>}
         <div className="practice-actions">
           <button className="skip-button" onClick={nextQuestion}>Skip question</button>
           <button className="primary-button" disabled={answer === null} onClick={nextQuestion}>Next question <span aria-hidden="true">→</span></button>
