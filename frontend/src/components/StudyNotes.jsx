@@ -15,14 +15,17 @@ function StudyTerm({ term, meaning }) {
     const updatePosition = () => {
       if (!buttonRef.current || !popupRef.current) return;
       const anchor = buttonRef.current.getBoundingClientRect();
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      popupRef.current.style.maxWidth = `${Math.max(0, viewportWidth - 24)}px`;
       const popup = popupRef.current.getBoundingClientRect();
       const padding = 12;
       const left = Math.min(
         Math.max(padding, anchor.left),
-        Math.max(padding, window.innerWidth - popup.width - padding)
+        Math.max(padding, viewportWidth - popup.width - padding)
       );
       const below = anchor.bottom + 8;
-      const top = below + popup.height <= window.innerHeight - padding
+      const top = below + popup.height <= viewportHeight - padding
         ? below
         : Math.max(padding, anchor.top - popup.height - 8);
       setPosition({ top, left });
