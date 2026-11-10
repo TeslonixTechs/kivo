@@ -86,6 +86,18 @@ export default function App() {
     setKits((current) => [...restoredKits, ...current]);
     setActivities((current) => [...restoredActivities, ...current]);
   };
+  const importStudyKits = async (importedKits) => {
+    const existingIds = new Set(kits.map((kit) => kit.id));
+    const restoredKits = importedKits.map((kit) => {
+      const restored = existingIds.has(kit.id) ? { ...kit, id: crypto.randomUUID() } : kit;
+      existingIds.add(restored.id);
+      return restored;
+    });
+    for (const kit of restoredKits) await db.kits.save(kit);
+    setKits((current) => [...restoredKits, ...current]);
+    setSelected(restoredKits[0]);
+    setScreen("kit");
+  };
   const deleteKit = async (id) => {
     await db.kits.remove(id);
     setKits((current) => current.filter((kit) => kit.id !== id));
@@ -100,5 +112,5 @@ export default function App() {
   if (screen === "create") return <CreateKit onNavigate={setScreen} onCreated={createKit} />;
   if (screen === "settings") return <Settings profile={profile} theme={theme} onThemeChange={setTheme} textScale={textScale} onTextScaleChange={setTextScale} highContrast={highContrast} onHighContrastChange={setHighContrast} kits={kits} activities={activities} onRestoreBackup={restoreBackup} onNavigate={setScreen} />;
   if (screen === "tools") return <Tools kits={kits} activities={activities} onUpdateKit={updateKit} onAddActivity={addActivity} onOpenKit={(kit) => { setSelected(kit); setScreen("kit"); }} onNavigate={setScreen} />;
-  return <Dashboard profile={profile} kits={kits} activities={activities} streak={0} onNavigate={setScreen} onCreate={() => setScreen("create")} onDeleteKit={deleteKit} onOpenKit={(kit) => { setSelected(kit); setScreen("kit"); }} />;
+  return <Dashboard profile={profile} kits={kits} activities={activities} streak={0} onNavigate={setScreen} onCreate={() => setScreen("create")} onDeleteKit={deleteKit} onOpenKit={(kit) => { setSelected(kit); setScreen("kit"); }} onImportKits={importStudyKits} />;
 }

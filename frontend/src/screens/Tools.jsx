@@ -113,13 +113,15 @@ function Progress({ kits, activities }) {
 const guideParts = (kit) => {
   const guide = kit.guide || {};
   return [
+    ["Study kit", kit.title],
+    ["Guide title", guide.title],
     ["Overview", guide.overview],
     ...(guide.sections || []).flatMap((section) => [
-      [section.heading || "Study guide section", section.content],
+      [section.heading || "Study guide section", `${section.heading || ""} ${section.content || ""}`],
       ...(section.points || []).map((point) => ["Key point", point]),
-      ...(section.keyTerms || []).map((term) => [term.term || term.word || "Key term", term.meaning]),
+      ...(section.keyTerms || []).map((term) => [term.term || term.word || "Key term", `${term.term || term.word || ""}: ${term.meaning || ""}`]),
     ]),
-    ...(guide.terms || []).map((term) => [term.term || term.word || "Key term", term.meaning]),
+    ...(guide.terms || []).map((term) => [term.term || term.word || "Key term", `${term.term || term.word || ""}: ${term.meaning || ""}`]),
     ...(guide.quickRevision || []).map((point) => ["Quick revision", point]),
   ].filter(([, text]) => typeof text === "string" && text.trim());
 };

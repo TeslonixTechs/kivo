@@ -499,14 +499,26 @@ function Flashcards({ kit, onUpdate }) {
           throw new Error("A flashcard review record is invalid.");
         }
       }
-      const existing = getGuideTerms(kit.guide);
-      const merged = [...existing];
+      const mergedSections = (kit.guide.sections || []).map((section) => ({ ...section, keyTerms: [...(section.keyTerms || [])] }));
+      const mergedTerms = [...(kit.guide.terms || [])];
       imported.forEach((item) => {
-        const index = merged.findIndex((entry) => entry.term.toLocaleLowerCase() === item.term.toLocaleLowerCase());
-        if (index < 0) merged.push(item);
-        else merged[index] = item;
+        const key = item.term.toLocaleLowerCase();
+        const globalIndex = mergedTerms.findIndex((entry) => String(entry.term || entry.word || "").toLocaleLowerCase() === key);
+        if (globalIndex >= 0) {
+          mergedTerms[globalIndex] = { ...mergedTerms[globalIndex], term: item.term, meaning: item.meaning };
+          return;
+        }
+        const sectionIndex = mergedSections.findIndex((section) => section.keyTerms.some((entry) => String(entry.term || entry.word || "").toLocaleLowerCase() === key));
+        if (sectionIndex >= 0) {
+          const section = mergedSections[sectionIndex];
+          const termIndex = section.keyTerms.findIndex((entry) => String(entry.term || entry.word || "").toLocaleLowerCase() === key);
+          section.keyTerms[termIndex] = { ...section.keyTerms[termIndex], term: item.term, meaning: item.meaning };
+          return;
+        }
+        mergedTerms.push(item);
       });
-      if (merged.length > 1000) throw new Error("This deck would exceed the 1,000-card limit.");
+      const mergedGuide = { ...kit.guide, sections: mergedSections, terms: mergedTerms };
+      if (getGuideTerms(mergedGuide).length > 1000) throw new Error("This deck would exceed the 1,000-card limit.");
       const mergedProgress = { ...progress };
       Object.entries(importedProgress).forEach(([key, record]) => {
         const current = mergedProgress[key];
@@ -514,7 +526,7 @@ function Flashcards({ kit, onUpdate }) {
           mergedProgress[key] = record;
         }
       });
-      await onUpdate({ ...kit, guide: { ...kit.guide, terms: merged }, flashcardProgress: mergedProgress });
+      await onUpdate({ ...kit, guide: mergedGuide, flashcardProgress: mergedProgress });
       setTransferMessage(`Imported ${imported.length} card${imported.length === 1 ? "" : "s"}. Existing terms were updated when names matched.`);
     } catch (error) {
       console.error("Flashcard import failed:", error);
