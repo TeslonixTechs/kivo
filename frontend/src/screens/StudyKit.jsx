@@ -126,65 +126,76 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   };
-  const downloadGuide = () => {
+  const downloadGuide = async () => {
     const guide = kit.guide;
-    const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    })[character]);
-    const formatHtmlText = (value) => escapeHtml(value)
-      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\n/g, "<br>");
-    const sections = (guide.sections || []).map((section) => `
-      <section>
-        <h2>${formatHtmlText(section.heading)}</h2>
-        ${section.content ? `<p>${formatHtmlText(section.content)}</p>` : ""}
-        ${section.points?.length ? `<ul>${section.points.map((point) => `<li>${formatHtmlText(point)}</li>`).join("")}</ul>` : ""}
-        ${section.keyTerms?.length ? `<h3>Key terms</h3><dl>${section.keyTerms.map((term) => `<dt>${formatHtmlText(term.term || term.word)}</dt><dd>${formatHtmlText(term.meaning)}</dd>`).join("")}</dl>` : ""}
-      </section>
-    `).join("");
-    const quickRevision = guide.quickRevision?.length
-      ? `<section><h2>Quick revision</h2><ul>${guide.quickRevision.map((item) => `<li>${formatHtmlText(item)}</li>`).join("")}</ul></section>`
-      : "";
-    const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(guide.title || kit.title)}</title>
-  <style>
-    :root{font:16px/1.65 system-ui,sans-serif;color:#172033;background:#f5f7ff}
-    body{max-width:820px;margin:40px auto;padding:36px;background:#fff;border-radius:16px}
-    h1,h2{font-family:Georgia,serif;line-height:1.25}h1{font-size:2.2rem}
-    h2{margin-top:2rem;border-top:1px solid #e5e7ef;padding-top:1rem}
-    .meta{color:#7c3aed;font-weight:700}p,li,dd{color:#505b73}
-    dt{margin-top:1rem;color:#7c3aed;font-weight:700}dd{margin-left:0}
-    @media print{body{max-width:none;margin:0;padding:0;border-radius:0}h2{break-after:avoid}}
-  </style>
-</head>
-<body>
-  <p class="meta">${escapeHtml(guide.difficulty || kit.difficulty)} study guide</p>
-  <h1>${escapeHtml(guide.title || kit.title)}</h1>
-  ${guide.overview ? `<p>${formatHtmlText(guide.overview)}</p>` : ""}
-  ${sections}
-  ${quickRevision}
-</body>
-</html>`;
-    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
-    const link = document.createElement("a");
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({ format: "a4", unit: "pt" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 52;
+    const contentWidth = pageWidth - margin * 2;
+    let y = margin;
+    const plainText = (value) => String(value ?? "").replace(/\*\*(.+?)\*\*/g, "$1");
+    const ensureSpace = (height) => {
+      if (y + height > pageHeight - margin) {
+        pdf.addPage();
+        y = margin;
+      }
+    };
+    const writeText = (value, { size = 11, bold = false, color = [55, 65, 81], indent = 0, gap = 8 } = {}) => {
+      const text = plainText(value);
+      if (!text) return;
+      pdf.setFont("helvetica", bold ? "bold" : "normal");
+      pdf.setFontSize(size);
+      pdf.setTextColor(...color);
+      const lines = pdf.splitTextToSize(text, contentWidth - indent);
+      const lineHeight = size * 1.45;
+      for (const line of lines) {
+        ensureSpace(lineHeight);
+        pdf.text(line, margin + indent, y);
+        y += lineHeight;
+      }
+      y += gap;
+    };
+    writeText(guide.title || kit.title, { size: 25, bold: true, color: [35, 29, 65], gap: 8 });
+    writeText(`${guide.difficulty || kit.difficulty} study guide`, { size: 10, bold: true, color: [124, 58, 237], gap: 18 });
+    if (guide.overview) writeText(guide.overview, { size: 12, color: [80, 91, 115], gap: 18 });
+    for (const section of guide.sections || []) {
+      writeText(section.heading, { size: 17, bold: true, color: [35, 29, 65], gap: 7 });
+      if (section.content) writeText(section.content, { size: 11 });
+      for (const point of section.points || []) {
+        writeText(`- ${point}`, { size: 11, indent: 10, gap: 4 });
+      }
+      for (const term of section.keyTerms || []) {
+        writeText(`${term.term || term.word}: ${term.meaning}`, { size: 10, indent: 10, gap: 4 });
+      }
+      y += 10;
+    }
+    if (guide.terms?.length) {
+      writeText("Key terms", { size: 17, bold: true, color: [35, 29, 65], gap: 7 });
+      for (const term of guide.terms) {
+        writeText(`${term.term || term.word}: ${term.meaning}`, { size: 10, indent: 10, gap: 4 });
+      }
+    }
+    if (guide.quickRevision?.length) {
+      writeText("Quick revision", { size: 17, bold: true, color: [35, 29, 65], gap: 7 });
+      for (const point of guide.quickRevision) {
+        writeText(`- ${point}`, { size: 11, indent: 10, gap: 4 });
+      }
+    }
+    const pageCount = pdf.internal.getNumberOfPages();
+    for (let page = 1; page <= pageCount; page += 1) {
+      pdf.setPage(page);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.setTextColor(140, 145, 160);
+      pdf.text(`${page} / ${pageCount}`, pageWidth - margin, pageHeight - 24, { align: "right" });
+    }
     const filename = String(guide.title || kit.title || "study-guide")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || "study-guide";
-    link.href = url;
-    link.download = `${filename}.html`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    pdf.save(`${filename}.pdf`);
   };
 
   const tabs = [["guide", BookOpen, "Study guide"], ["materials", FolderOpen, "Materials"], ["smart", Sparkles, "Smart study"], ["test", CircleHelp, "Test"]];
