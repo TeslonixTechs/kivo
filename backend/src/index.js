@@ -174,8 +174,9 @@ app.post("/api/questions", async (req, res) => {
 
 ${source.slice(0, 120000)}
 
-Return valid JSON as {"questions":[{"prompt":string,"options":[4 strings],"answer":number,"explanation":string}]}.
+Return valid JSON as {"questions":[{"prompt":string,"options":[4 strings],"answer":number,"topic":"short topic name","explanation":string}]}.
 For every question, explanation is required and must briefly explain why the correct option is right, using the supplied study summary.
+Set topic to the specific concept being tested so the student can track strengths and topics to revisit.
 For Theory questions use 0 options and include a modelAnswer and explanation. MCQ answer must be the zero-based index of the correct option. Include varied concepts, applications, comparisons, and details from the summary.`;
   try {
     const generated = await generateWithGemini(prompt);
@@ -183,6 +184,10 @@ For Theory questions use 0 options and include a modelAnswer and explanation. MC
     if (generated.questions.some((question) => typeof question.explanation !== "string" || !question.explanation.trim())) {
       throw new Error("AI returned questions without explanations");
     }
+    generated.questions = generated.questions.map((question) => ({
+      ...question,
+      topic: typeof question.topic === "string" && question.topic.trim() ? question.topic.trim() : "General review",
+    }));
     res.json({ questions: generated.questions });
   } catch (error) {
     console.error("AI question generation failed:", error.message);

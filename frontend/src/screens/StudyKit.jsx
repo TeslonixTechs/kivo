@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, BookOpen, Check, CircleHelp, Download, FileText, FolderOpen, RotateCcw, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -79,9 +79,23 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
   const [generating, setGenerating] = useState(false);
   const [guideError, setGuideError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [editingGuide, setEditingGuide] = useState(false);
+  const [guideDraft, setGuideDraft] = useState(null);
+  const [guideSaveError, setGuideSaveError] = useState("");
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const input = useRef(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pastedText, setPastedText] = useState("");
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
   const addFiles = (files) => {
     const materials = [...files].map((file) => ({ id: crypto.randomUUID(), name: file.name, size: file.size, type: file.type, blob: file, createdAt: new Date().toISOString() }));
     onUpdate({ ...kit, materials: [...(kit.materials || []), ...materials] });
@@ -137,6 +151,22 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
     await navigator.clipboard.writeText(notes);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
+  };
+  const startGuideEdit = () => {
+    setGuideDraft(structuredClone(kit.guide));
+    setGuideSaveError("");
+    setEditingGuide(true);
+  };
+  const saveGuideEdit = async () => {
+    try {
+      await onUpdate({ ...kit, guide: guideDraft });
+      setEditingGuide(false);
+      setGuideDraft(null);
+      setGuideSaveError("");
+    } catch (error) {
+      console.error("Study guide edits could not be saved:", error);
+      setGuideSaveError("Your edits could not be saved. Please try again.");
+    }
   };
   const downloadGuide = async () => {
     const guide = kit.guide;
@@ -228,34 +258,127 @@ export default function StudyKit({ kit, onNavigate, onUpdate }) {
         ) : kit.guide ? (
           <div>
             <div className="guide-actions">
-              <button className="secondary-button" disabled={generating} onClick={generate}>Regenerate</button>
-              <button className="primary-button" onClick={copyNotes}>{copied ? "Copied!" : "Copy notes"}</button>
-              <button className="secondary-button guide-download" onClick={downloadGuide}><Download size={16} /> Download guide</button>
+              {editingGuide ? (
+                <>
+                  <button className="secondary-button" onClick={() => { setEditingGuide(false); setGuideDraft(null); setGuideSaveError(""); }}>Cancel editing</button>
+                  <button className="primary-button" onClick={saveGuideEdit}>Save changes</button>
+                </>
+              ) : (
+                <>
+                  <button className="secondary-button" onClick={startGuideEdit}>Edit guide</button>
+                  <button className="secondary-button" disabled={generating || !isOnline} onClick={generate}>Regenerate</button>
+                  <button className="primary-button" onClick={copyNotes}>{copied ? "Copied!" : "Copy notes"}</button>
+                  <button className="secondary-button guide-download" onClick={downloadGuide}><Download size={16} /> Download PDF</button>
+                </>
+              )}
             </div>
-            <StudyNotes guide={kit.guide} />
+            {guideSaveError && <p className="guide-error" role="alert">{guideSaveError}</p>}
+            {!isOnline && !editingGuide && <p className="offline-feature-note">Your saved guide and flashcards are available offline. Generation needs internet.</p>}
+            {editingGuide
+              ? <GuideEditor guide={guideDraft} onChange={setGuideDraft} />
+              : <StudyNotes guide={kit.guide} />}
           </div>
         ) : (
           <div className="generate-state guide-empty-card">
             <div><Sparkles /></div>
             {guideError && <p className="guide-error" role="alert">{guideError}</p>}
             <p>Generate a study guide from your uploaded materials</p>
-            <button className="primary-button" disabled={generating} onClick={generate}>
-              {guideError ? "Retry" : "Generate study guide"}
+            <button className="primary-button" disabled={generating || !isOnline} onClick={generate}>
+              {!isOnline ? "Connect to generate" : guideError ? "Retry" : "Generate study guide"}
             </button>
+            {!isOnline && <p className="offline-feature-note">Guide generation needs an internet connection.</p>}
           </div>
         )}
       </section>
     )}
     {tab === "flashcards" && <Flashcards kit={kit} onUpdate={onUpdate} />}
-    {tab === "smart" && <SmartPractice kit={kit} />}
-    {tab === "test" && <TestView kit={kit} />}
+    {tab === "smart" && <SmartPractice kit={kit} onUpdate={onUpdate} isOnline={isOnline} />}
+    {tab === "test" && <TestView kit={kit} isOnline={isOnline} />}
   </div></AppShell>;
+}
+
+function GuideEditor({ guide, onChange }) {
+  const updateSection = (sectionIndex, updates) => {
+    onChange({
+      ...guide,
+      sections: guide.sections.map((section, index) => index === sectionIndex
+        ? { ...section, ...updates }
+        : section),
+    });
+  };
+  const updateTerms = (terms, update) => terms.map((term, index) => index === update.index
+    ? { ...term, [update.field]: update.value }
+    : term);
+  const addSection = () => onChange({
+    ...guide,
+    sections: [...(guide.sections || []), { heading: "New section", content: "", points: [], keyTerms: [] }],
+  });
+  const removeSection = (sectionIndex) => onChange({
+    ...guide,
+    sections: guide.sections.filter((_, index) => index !== sectionIndex),
+  });
+
+  return (
+    <div className="guide-editor">
+      <label>
+        Guide title
+        <input value={guide.title || ""} onChange={(event) => onChange({ ...guide, title: event.target.value })} />
+      </label>
+      <label>
+        Summary
+        <textarea value={guide.overview || ""} onChange={(event) => onChange({ ...guide, overview: event.target.value })} />
+      </label>
+      {(guide.sections || []).map((section, sectionIndex) => (
+        <section className="guide-editor-section" key={sectionIndex}>
+          <div className="guide-editor-heading">
+            <label>
+              Section heading
+              <input value={section.heading || ""} onChange={(event) => updateSection(sectionIndex, { heading: event.target.value })} />
+            </label>
+            <button type="button" className="delete-material" aria-label={`Remove section ${section.heading || sectionIndex + 1}`} onClick={() => removeSection(sectionIndex)}><Trash2 size={16} /></button>
+          </div>
+          <label>
+            Explanation
+            <textarea value={section.content || ""} onChange={(event) => updateSection(sectionIndex, { content: event.target.value })} />
+          </label>
+          <label>
+            Key points <span className="guide-editor-hint">One point per line</span>
+            <textarea value={(section.points || []).join("\n")} onChange={(event) => updateSection(sectionIndex, { points: event.target.value.split("\n").filter((point) => point.trim()) })} />
+          </label>
+          <div className="guide-editor-terms">
+            <span>Defined terms</span>
+            {(section.keyTerms || []).map((term, termIndex) => (
+              <div className="guide-editor-term" key={termIndex}>
+                <input aria-label="Term" value={term.term || term.word || ""} onChange={(event) => updateSection(sectionIndex, {
+                  keyTerms: updateTerms(section.keyTerms || [], { index: termIndex, field: term.term === undefined ? "word" : "term", value: event.target.value }),
+                })} />
+                <textarea aria-label={`Definition of ${term.term || term.word}`} value={term.meaning || ""} onChange={(event) => updateSection(sectionIndex, {
+                  keyTerms: updateTerms(section.keyTerms || [], { index: termIndex, field: "meaning", value: event.target.value }),
+                })} />
+                <button type="button" className="delete-material" aria-label="Remove term" onClick={() => updateSection(sectionIndex, { keyTerms: (section.keyTerms || []).filter((_, index) => index !== termIndex) })}><Trash2 size={15} /></button>
+              </div>
+            ))}
+            <button type="button" className="secondary-button" onClick={() => updateSection(sectionIndex, {
+              keyTerms: [...(section.keyTerms || []), { term: "", meaning: "" }],
+            })}>Add defined term</button>
+          </div>
+        </section>
+      ))}
+      <button type="button" className="secondary-button" onClick={addSection}>Add section</button>
+      <label>
+        Quick revision <span className="guide-editor-hint">One item per line</span>
+        <textarea value={(guide.quickRevision || []).join("\n")} onChange={(event) => onChange({ ...guide, quickRevision: event.target.value.split("\n").filter((point) => point.trim()) })} />
+      </label>
+    </div>
+  );
 }
 
 function Flashcards({ kit, onUpdate }) {
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [studyAll, setStudyAll] = useState(false);
+  const [reviewedNow, setReviewedNow] = useState([]);
   const terms = getGuideTerms(kit.guide);
   const progress = kit.flashcardProgress || {};
   const now = Date.now();
@@ -267,7 +390,12 @@ function Flashcards({ kit, onUpdate }) {
     .map(({ term }) => progress[term.toLocaleLowerCase()]?.dueAt)
     .filter((dueAt) => dueAt && new Date(dueAt).getTime() > now)
     .sort((a, b) => new Date(a) - new Date(b))[0];
-  const card = dueCards[0];
+  const knownCount = terms.filter(({ term }) => (progress[term.toLocaleLowerCase()]?.repetitions || 0) > 0).length;
+  const reviewedCount = terms.filter(({ term }) => progress[term.toLocaleLowerCase()]?.lastReviewedAt).length;
+  const cardQueue = studyAll
+    ? terms.filter(({ term }) => !reviewedNow.includes(term.toLocaleLowerCase()))
+    : dueCards;
+  const card = cardQueue[0];
   const formatDueDate = (date) => new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -304,6 +432,7 @@ function Flashcards({ kit, onUpdate }) {
           },
         },
       });
+      if (studyAll) setReviewedNow((current) => [...current, key]);
       setRevealed(false);
     } catch (error) {
       console.error("Flashcard progress could not be saved:", error);
@@ -322,12 +451,20 @@ function Flashcards({ kit, onUpdate }) {
   if (!card) {
     return (
       <section className="tab-panel flashcards-panel">
-        <div className="flashcards-summary"><strong>{terms.length} terms</strong><span>All caught up for now.</span></div>
+        <div className="flashcards-summary">
+          <strong>{knownCount} / {terms.length} known</strong>
+          <span>{reviewedCount} reviewed · {dueCards.length} due</span>
+        </div>
         <div className="flashcard-empty">
           <Check size={24} />
-          <h2>Great work!</h2>
-          <p>There are no cards due right now.</p>
-          {nextDue && <span>Next review: {formatDueDate(nextDue)}</span>}
+          <h2>{studyAll ? "Deck complete!" : "Great work!"}</h2>
+          <p>{studyAll ? "You reviewed every card in this deck." : "There are no cards due right now."}</p>
+          {!studyAll && nextDue && <span>Next review: {formatDueDate(nextDue)}</span>}
+          <button type="button" className="primary-button" onClick={() => {
+            setStudyAll(true);
+            setReviewedNow([]);
+            setRevealed(false);
+          }}>{studyAll ? "Review all cards again" : "Review cards now"}</button>
         </div>
       </section>
     );
@@ -337,8 +474,14 @@ function Flashcards({ kit, onUpdate }) {
     <section className="tab-panel flashcards-panel">
       <div className="flashcards-summary">
         <strong>{dueCards.length} due</strong>
-        <span>{terms.length} terms in this deck</span>
+        <span>{knownCount} / {terms.length} known · {reviewedCount} reviewed</span>
       </div>
+      {!studyAll && <button type="button" className="flashcards-review-all" onClick={() => {
+        setStudyAll(true);
+        setReviewedNow([]);
+        setRevealed(false);
+      }}>Review all cards now</button>}
+      {studyAll && <p className="flashcards-mode">Reviewing all cards · {reviewedNow.length + 1} of {terms.length}</p>}
       <button
         type="button"
         className={`flashcard${revealed ? " is-revealed" : ""}`}
@@ -367,20 +510,28 @@ function Flashcards({ kit, onUpdate }) {
   );
 }
 
-function SmartPractice({ kit }) {
+function SmartPractice({ kit, onUpdate, isOnline }) {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answer, setAnswer] = useState(null);
-  const [correctCount, setCorrectCount] = useState(0);
-  const [answeredCount, setAnsweredCount] = useState(0);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+  const [activityError, setActivityError] = useState("");
+  const activity = kit.studyActivity || [];
+  const sessionActivity = activity.filter((item) => item.sessionId === sessionId);
+  const correctCount = sessionActivity.filter((item) => item.correct).length;
+  const answeredCount = sessionActivity.length;
+  const accuracy = answeredCount ? Math.round((correctCount / answeredCount) * 100) : 100;
   const loadQuestions = async () => {
+    if (!isOnline) return;
     setLoading(true);
+    setActivityError("");
     try {
       const result = await requestQuestions({ kit, guide: kit.guide, type: "MCQ", difficulty: kit.difficulty, count: 20 });
       setQuestions(result.questions || []);
       setQuestionIndex(0);
       setAnswer(null);
+      setSessionId(crypto.randomUUID());
     } catch (error) {
       console.error("Smart study generation failed:", error);
       window.alert("AI generation failed");
@@ -388,15 +539,33 @@ function SmartPractice({ kit }) {
       setLoading(false);
     }
   };
-  if (!kit.guide) return <section className="tab-panel generate-state"><div><Sparkles /></div><p className="eyebrow">SMART STUDY</p><h2>Generate your study guide first</h2><p>Smart Study creates questions from the summary that is generated from your uploaded notes.</p></section>;
-  if (!questions.length) return <section className="tab-panel practice">{loading ? <LoadingState label="Generating smart study questions" /> : <div className="practice-card practice-launch"><Sparkles /><h2>Practice from your study guide</h2><p>Questions are generated from the key concepts in your uploaded notes.</p><button className="primary-button" onClick={loadQuestions}>Start smart study</button></div>}</section>;
+  if (!kit.guide) return <section className="tab-panel generate-state"><div><Sparkles /></div><p className="eyebrow">SMART STUDY</p><h2>Generate your study guide first</h2><p>Smart Study creates questions from the summary that is generated from your uploaded notes.</p><StudyActivitySummary activity={activity} /></section>;
+  if (!questions.length) return <section className="tab-panel practice">
+    <StudyActivitySummary activity={activity} />
+    {loading ? <LoadingState label="Generating smart study questions" /> : <div className="practice-card practice-launch"><Sparkles /><h2>Practice from your study guide</h2><p>Questions are generated from the key concepts in your uploaded notes.</p><button className="primary-button" disabled={!isOnline} onClick={loadQuestions}>{isOnline ? "Start smart study" : "Connect to generate questions"}</button>{!isOnline && <p className="offline-feature-note">Your saved guide and flashcards are available offline. Smart Study questions need internet.</p>}</div>}
+  </section>;
   const question = questions[questionIndex % questions.length];
-  const accuracy = answeredCount ? Math.round((correctCount / answeredCount) * 100) : 100;
-  const chooseAnswer = (index) => {
+  const chooseAnswer = async (index) => {
     if (answer !== null) return;
     setAnswer(index);
-    setAnsweredCount((count) => count + 1);
-    if (index === question.answer) setCorrectCount((count) => count + 1);
+    setActivityError("");
+    const record = {
+      id: crypto.randomUUID(),
+      sessionId,
+      question: question.prompt,
+      topic: question.topic || "General review",
+      correct: index === question.answer,
+      answeredAt: new Date().toISOString(),
+    };
+    try {
+      await onUpdate({
+        ...kit,
+        studyActivity: [...activity, record].slice(-500),
+      });
+    } catch (error) {
+      console.error("Study activity could not be saved:", error);
+      setActivityError("This answer could not be saved to your study history.");
+    }
   };
   const nextQuestion = () => {
     setQuestionIndex((index) => index + 1);
@@ -405,6 +574,7 @@ function SmartPractice({ kit }) {
   return (
     <section className="tab-panel practice">
       <div className="accuracy"><span>Session accuracy</span><strong>{accuracy}%</strong></div>
+      {activityError && <p className="flashcard-error" role="alert">{activityError}</p>}
       <div className="practice-card">
         <span className="eyebrow">QUESTION {questionIndex + 1}</span>
         <h2>{question.prompt}</h2>
@@ -438,11 +608,73 @@ function SmartPractice({ kit }) {
           <button className="primary-button" disabled={answer === null} onClick={nextQuestion}>Next question <span aria-hidden="true">→</span></button>
         </div>
       </div>
+      <StudyActivitySummary activity={activity} />
     </section>
   );
 }
 
-function TestView({ kit }) {
+function StudyActivitySummary({ activity }) {
+  const sessions = Object.values(activity.reduce((groups, record) => {
+    if (!record.sessionId) return groups;
+    const group = groups[record.sessionId] || {
+      id: record.sessionId,
+      records: [],
+      latestAt: record.answeredAt,
+    };
+    group.records.push(record);
+    if (new Date(record.answeredAt) > new Date(group.latestAt)) group.latestAt = record.answeredAt;
+    groups[record.sessionId] = group;
+    return groups;
+  }, {})).sort((a, b) => new Date(b.latestAt) - new Date(a.latestAt));
+  const topicStats = activity.reduce((topics, record) => {
+    const topic = record.topic || "General review";
+    const item = topics[topic] || { attempts: 0, incorrect: 0 };
+    item.attempts += 1;
+    if (!record.correct) item.incorrect += 1;
+    topics[topic] = item;
+    return topics;
+  }, {});
+  const topicsToReview = Object.entries(topicStats)
+    .filter(([, stats]) => stats.incorrect > 0)
+    .sort((a, b) => b[1].incorrect - a[1].incorrect || b[1].attempts - a[1].attempts)
+    .slice(0, 4);
+  const totalCorrect = activity.filter((record) => record.correct).length;
+  const overallAccuracy = activity.length ? Math.round((totalCorrect / activity.length) * 100) : null;
+  const dateLabel = (value) => new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
+
+  return (
+    <section className="study-activity">
+      <div className="study-activity-heading">
+        <div><p className="eyebrow">YOUR PROGRESS</p><h3>Study activity</h3></div>
+        {overallAccuracy !== null && <span>{overallAccuracy}% overall accuracy</span>}
+      </div>
+      {!activity.length ? (
+        <p className="study-activity-empty">Answer Smart Study questions to build your progress history.</p>
+      ) : (
+        <div className="study-activity-grid">
+          <div>
+            <h4>Topics to revisit</h4>
+            {topicsToReview.length
+              ? <ul className="weak-topics">{topicsToReview.map(([topic, stats]) => <li key={topic}><span>{topic}</span><strong>{stats.incorrect} missed</strong></li>)}</ul>
+              : <p className="study-activity-empty">No missed topics yet. Keep it up!</p>}
+          </div>
+          <div>
+            <h4>Recent sessions</h4>
+            <ul className="study-session-list">
+              {sessions.slice(0, 5).map((session) => {
+                const correct = session.records.filter((record) => record.correct).length;
+                const score = Math.round((correct / session.records.length) * 100);
+                return <li key={session.id}><span>{dateLabel(session.latestAt)} · {session.records.length} questions</span><strong>{score}%</strong></li>;
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TestView({ kit, isOnline }) {
   const [started, setStarted] = useState(false);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [selected, setSelected] = useState(null);
@@ -452,6 +684,7 @@ function TestView({ kit }) {
   const [loading, setLoading] = useState(false);
   const options = testQuestions[questionIndex]?.options || [];
   const beginTest = async () => {
+    if (!isOnline) return;
     setLoading(true);
     try {
       const result = await requestQuestions({ kit, guide: kit.guide, type: config.type, difficulty: config.difficulty, count: Number(config.questions) });
@@ -487,5 +720,5 @@ function TestView({ kit }) {
       })}</div> : <textarea placeholder="Write your answer..." value={typeof selected === "string" ? selected : ""} onChange={(event) => setSelected(event.target.value)} />}
       <div className="test-actions"><button className="skip-button" onClick={next}>Skip question</button><button className="primary-button" disabled={selected === null || selected === ""} onClick={next}>{questionIndex + 1 === Number(config.questions) ? "Finish test" : "Next question"} →</button></div>
     </div>
-  </section> : loading ? <LoadingState label="Generating your test" /> : <section className="tab-panel test-create"><p className="eyebrow">ASSESS YOUR PROGRESS</p><h2>Create a test</h2><div className="test-types">{["MCQ", "Theory"].map((type) => <button key={type} className={config.type === type ? "selected" : ""} onClick={() => setConfig({ ...config, type })}>{type}</button>)}</div><div className="test-config"><label>Difficulty<select value={config.difficulty} onChange={(event) => setConfig({ ...config, difficulty: event.target.value })}><option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option></select></label><label>Questions<select value={config.questions} onChange={(event) => setConfig({ ...config, questions: event.target.value })}><option value="5">5</option><option value="10">10</option><option value="20">20</option></select></label><label>Timer (minutes)<select value={config.timer} onChange={(event) => setConfig({ ...config, timer: event.target.value })}><option>10</option><option>20</option><option>30</option></select></label></div><button className="primary-button wide" onClick={beginTest}>Start test</button></section>;
+  </section> : loading ? <LoadingState label="Generating your test" /> : <section className="tab-panel test-create"><p className="eyebrow">ASSESS YOUR PROGRESS</p><h2>Create a test</h2><div className="test-types">{["MCQ", "Theory"].map((type) => <button key={type} className={config.type === type ? "selected" : ""} onClick={() => setConfig({ ...config, type })}>{type}</button>)}</div><div className="test-config"><label>Difficulty<select value={config.difficulty} onChange={(event) => setConfig({ ...config, difficulty: event.target.value })}><option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option></select></label><label>Questions<select value={config.questions} onChange={(event) => setConfig({ ...config, questions: event.target.value })}><option value="5">5</option><option value="10">10</option><option value="20">20</option></select></label><label>Timer (minutes)<select value={config.timer} onChange={(event) => setConfig({ ...config, timer: event.target.value })}><option>10</option><option>20</option><option>30</option></select></label></div><button className="primary-button wide" disabled={!isOnline} onClick={beginTest}>{isOnline ? "Start test" : "Connect to generate test"}</button>{!isOnline && <p className="offline-feature-note">Test generation needs an internet connection.</p>}</section>;
 }

@@ -111,6 +111,20 @@ button { cursor: pointer; }
 .guide-empty-card .guide-error { color:#d95b72;margin-bottom:4px; }
 .guide-actions { max-width:820px;margin:0 auto 12px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px; }
 .guide-download { display:inline-flex;align-items:center;justify-content:center;gap:8px; }
+.offline-feature-note { margin:10px auto;color:#929bb5;font-size:12px;text-align:center; }
+.guide-editor { max-width:820px;margin:0 auto;padding:24px;background:#fff;border:1px solid #e2e5ef;border-radius:16px;display:grid;gap:16px; }
+.guide-editor label { display:grid;gap:7px;color:#505b73;font-size:12px;font-weight:700; }
+.guide-editor input,.guide-editor textarea { width:100%;padding:11px 12px;border:1px solid #e2e5ef;border-radius:10px;background:#fff;color:#0b0f24;caret-color:#7c3aed;-webkit-text-fill-color:#0b0f24; }
+.guide-editor textarea { min-height:100px;resize:vertical;line-height:1.55; }
+.guide-editor-section { padding:18px;border:1px solid #e2e5ef;border-radius:12px;display:grid;gap:14px; }
+.guide-editor-heading { display:grid;grid-template-columns:1fr 40px;align-items:end;gap:10px; }
+.guide-editor-heading .delete-material { margin-bottom:5px; }
+.guide-editor-hint { color:#929bb5;font-weight:400; }
+.guide-editor-terms { display:grid;gap:9px;color:#505b73;font-size:12px;font-weight:700; }
+.guide-editor-term { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) 40px;align-items:center;gap:8px; }
+.guide-editor-term textarea { min-height:60px; }
+.flashcards-review-all { margin:12px 0 0;padding:0;border:0;background:none;color:#7c3aed;font-size:12px;font-weight:700;text-decoration:underline;text-underline-offset:3px; }
+.flashcards-mode { margin:12px 0 0;color:#7c3aed;font-size:12px;font-weight:700; }
 .flashcards-panel { max-width:680px;margin:0 auto; }
 .flashcards-summary { display:flex;align-items:center;justify-content:space-between;color:#929bb5;font-size:12px; }
 .flashcards-summary strong { color:#7c3aed; }
@@ -130,7 +144,25 @@ button { cursor: pointer; }
 .flashcard-empty p,.flashcard-empty > span { color:#929bb5;font-size:13px; }
 :root[data-theme="dark"] .flashcard,:root[data-theme="dark"] .flashcard-empty { background:#171d38;color:#fff;border-color:#343b63; }
 :root[data-theme="dark"] .flashcard.is-revealed { background:#202047;border-color:#7c3aed; }
-@media (max-width:640px) { .flashcard { min-height:250px;padding:24px 18px; }.flashcard > strong { font-size:23px; }.flashcard-actions { gap:8px; }.flashcard-actions button { min-width:0;flex:1;padding:0 12px; } }
+.study-activity { max-width:760px;margin:20px auto 0;padding:20px;background:#fff;border:1px solid #e2e5ef;border-radius:16px; }
+.study-activity-heading { display:flex;align-items:center;justify-content:space-between;gap:12px; }
+.study-activity-heading .eyebrow { margin:0 0 5px; }
+.study-activity-heading h3 { margin:0;font-family:Georgia,serif;font-size:20px; }
+.study-activity-heading > span { color:#7c3aed;font-size:12px;font-weight:700; }
+.study-activity-grid { display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px; }
+.study-activity-grid h4 { margin:0 0 8px;font-size:12px; }
+.weak-topics,.study-session-list { margin:0;padding:0;list-style:none; }
+.weak-topics li,.study-session-list li { display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-top:1px solid #eceef4;font-size:11px; }
+.weak-topics li strong { color:#d95b72;white-space:nowrap; }
+.study-session-list li > span { color:#929bb5; }
+.study-session-list li > strong { color:#7c3aed; }
+.study-activity-empty { color:#929bb5;font-size:12px;line-height:1.6; }
+:root[data-theme="dark"] .guide-editor,:root[data-theme="dark"] .study-activity { background:#171d38;color:#fff;border-color:#343b63; }
+:root[data-theme="dark"] .guide-editor-section { border-color:#343b63; }
+:root[data-theme="dark"] .guide-editor label,:root[data-theme="dark"] .guide-editor-terms { color:#c5cae0; }
+:root[data-theme="dark"] .guide-editor input,:root[data-theme="dark"] .guide-editor textarea { background:#0b0f24;color:#fff;border-color:#343b63;-webkit-text-fill-color:#fff; }
+:root[data-theme="dark"] .weak-topics li,:root[data-theme="dark"] .study-session-list li { border-color:#343b63; }
+@media (max-width:640px) { .flashcard { min-height:250px;padding:24px 18px; }.flashcard > strong { font-size:23px; }.flashcard-actions { gap:8px; }.flashcard-actions button { min-width:0;flex:1;padding:0 12px; }.guide-editor { padding:16px; }.guide-editor-section { padding:13px; }.guide-editor-term { grid-template-columns:1fr 40px; }.guide-editor-term textarea { grid-column:1; }.guide-editor-term .delete-material { grid-column:2;grid-row:1; }.study-activity { padding:16px; }.study-activity-grid { grid-template-columns:1fr;gap:12px; } }
 .study-note-section { grid-template-columns:1fr !important; }
 .study-note-section > div { position:relative;padding-left:0; }
 .study-note-section .study-note-number { color:#7c3aed;font-size:12px; }
