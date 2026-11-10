@@ -220,7 +220,15 @@ function SmartPractice({ kit }) {
         )}
         <div>
           {question.options.map((option, index) => (
-            <button key={option} className={answer !== null && index === question.answer ? "correct" : answer === index ? "wrong" : ""} onClick={() => chooseAnswer(index)}>
+            <button
+              key={option}
+              className={[
+                answer !== null && index === question.answer ? "correct" : "",
+                answer === index && index !== question.answer ? "wrong" : "",
+                answer === index && index === question.answer ? "selected-correct" : "",
+              ].filter(Boolean).join(" ")}
+              onClick={() => chooseAnswer(index)}
+            >
               <i>{String.fromCharCode(65 + index)}</i>{option}
             </button>
           ))}
