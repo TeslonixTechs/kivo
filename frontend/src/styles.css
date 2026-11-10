@@ -147,6 +147,12 @@ button { cursor: pointer; }
 :root[data-theme="dark"] .paste-panel,
 :root[data-theme="dark"] .test-result,
 :root[data-theme="dark"] .test-answer-options button { background:#171d38;color:#fff;border-color:#343b63; }
+:root[data-theme="dark"] .paste-panel textarea,
+:root[data-theme="dark"] .paste-panel textarea:focus { background:#0b0f24;color:#fff;border-color:#343b63;-webkit-text-fill-color:#fff; }
+:root[data-theme="dark"] .paste-panel textarea::placeholder { color:#aab1cc;-webkit-text-fill-color:#aab1cc;opacity:1; }
+.paste-panel textarea,
+.paste-panel textarea:focus { color:#0b0f24;background:#fff;caret-color:#7c3aed;-webkit-text-fill-color:#0b0f24; }
+.paste-panel textarea::placeholder { color:#929bb5;-webkit-text-fill-color:#929bb5;opacity:1; }
 :root[data-theme="dark"] .study-tabs button svg { color:inherit; }
 :root[data-theme="dark"] .loading-state { color:#a78bfa; }
 
